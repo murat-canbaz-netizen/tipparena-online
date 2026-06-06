@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.vite/
+.cache/
+
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+*.avif
+*.ico

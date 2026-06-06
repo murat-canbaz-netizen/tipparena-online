@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "build": "node -e \"console.log('Static TippArena build ready in outputs/')\"",
+    "dev": "node work/static-server.js"
+  }
+}
