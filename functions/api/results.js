@@ -1,6 +1,10 @@
 import { jsonResponse } from "../lib/shared.js";
 
 const apiUrl = "https://v3.football.api-sports.io/fixtures";
+const liveStatuses = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
+const liveCacheSeconds = 300;
+const idleCacheSeconds = 900;
+const rateLimitCacheSeconds = 600;
 const allowedParameters = [
   "id",
   "ids",
@@ -71,12 +75,30 @@ export async function onRequest(context) {
   }
 
   try {
+    const cache = caches.default;
+    const cacheKey = new Request(`${new URL(request.url).origin}/api/results?${query}`);
+    const cachedResponse = await cache.match(cacheKey);
+    if (cachedResponse) return cachedResponse;
+
     const apiResponse = await fetch(`${apiUrl}?${query}`, {
       headers: {
         "x-apisports-key": apiKey,
       },
     });
     const data = await apiResponse.json().catch(() => ({}));
+    const errorText = JSON.stringify(data.errors || data.message || "").toLowerCase();
+    const rateLimited = apiResponse.status === 429 || errorText.includes("too many requests") || errorText.includes("rate limit");
+
+    if (rateLimited) {
+      const response = jsonResponse(429, {
+        error: "Live-Ergebnisse werden später aktualisiert.",
+        retryAfterSeconds: rateLimitCacheSeconds,
+      });
+      response.headers.set("Cache-Control", `public, max-age=${rateLimitCacheSeconds}`);
+      response.headers.set("Retry-After", String(rateLimitCacheSeconds));
+      context.waitUntil(cache.put(cacheKey, response.clone()));
+      return response;
+    }
 
     if (!apiResponse.ok || data.errors?.length || Object.keys(data.errors || {}).length) {
       return jsonResponse(apiResponse.ok ? 502 : apiResponse.status, {
@@ -85,10 +107,18 @@ export async function onRequest(context) {
       });
     }
 
-    return jsonResponse(200, {
+    const fixtures = Array.isArray(data.response) ? data.response.map(normalizeFixture) : [];
+    const hasLiveMatches = fixtures.some((fixture) => liveStatuses.has(fixture.status));
+    const cacheSeconds = hasLiveMatches ? liveCacheSeconds : idleCacheSeconds;
+    const response = jsonResponse(200, {
       results: Number(data.results || 0),
-      fixtures: Array.isArray(data.response) ? data.response.map(normalizeFixture) : [],
+      fixtures,
+      hasLiveMatches,
+      nextUpdateSeconds: cacheSeconds,
     });
+    response.headers.set("Cache-Control", `public, max-age=${cacheSeconds}`);
+    context.waitUntil(cache.put(cacheKey, response.clone()));
+    return response;
   } catch (error) {
     return jsonResponse(502, {
       error: "API-Football ist momentan nicht erreichbar.",
