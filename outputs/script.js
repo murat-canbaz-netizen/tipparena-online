@@ -432,7 +432,7 @@ function avatarMarkup(value) {
   `;
 }
 
-async function apiRequest(path, options = {}, endpoint = `/.netlify/functions/${path}`) {
+async function apiRequest(path, options = {}, endpoint = `/api/${path}`) {
   if (!remoteState.online) return null;
   try {
     const response = await fetch(endpoint, {
