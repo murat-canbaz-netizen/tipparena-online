@@ -114,9 +114,68 @@ body.is-superadmin .superadmin-section {
   color: #657184;
 }
 
+.superadmin-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(300px, 520px);
+  gap: 22px;
+  align-items: start;
+  margin-top: 36px;
+  border: 1px solid rgba(217, 92, 79, 0.4);
+  border-radius: 14px;
+  padding: 22px;
+  background: #fff8f7;
+  box-shadow: 0 16px 42px rgba(217, 92, 79, 0.1);
+}
+
+.superadmin-danger-zone span {
+  color: #b74237;
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.superadmin-danger-zone h3 {
+  margin: 8px 0;
+  color: #7f1d1d;
+}
+
+.superadmin-danger-zone p {
+  margin: 0;
+  color: #7c4a47;
+}
+
+.superadmin-danger-zone form {
+  display: grid;
+  gap: 12px;
+}
+
+.superadmin-delete-button {
+  min-height: 50px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 18px;
+  background: #b74237;
+  color: white;
+  font: inherit;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.superadmin-delete-button:hover {
+  background: #922f28;
+}
+
+#superAdminResetMessage {
+  min-height: 22px;
+  margin: 0;
+  color: #b74237;
+  font-weight: 850;
+}
+
 @media (max-width: 760px) {
   .superadmin-access,
-  .superadmin-stats {
+  .superadmin-stats,
+  .superadmin-danger-zone {
     grid-template-columns: 1fr;
   }
 }
