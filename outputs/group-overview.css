@@ -7,9 +7,10 @@
 .match-panel .group-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  gap: clamp(20px, 2.2vw, 28px);
+  gap: 22px;
   width: 100%;
   max-width: 100%;
+  align-items: stretch;
   overflow: visible;
 }
 
@@ -17,15 +18,15 @@
   position: relative;
   display: grid;
   min-width: 0;
-  height: 170px;
-  min-height: 0;
-  max-height: 170px;
+  min-height: 170px;
+  max-height: 190px;
   align-content: space-between;
   gap: 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 22px;
-  padding: 20px;
+  border-radius: 24px;
+  padding: 22px 24px;
+  box-sizing: border-box;
   background:
     radial-gradient(circle at 92% 4%, rgba(105, 168, 255, 0.12), transparent 40%),
     linear-gradient(145deg, #172635, #111d2a);
@@ -51,51 +52,63 @@
 }
 
 .group-tile-head {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+  padding-right: 52px;
+  box-sizing: border-box;
 }
 
 .match-panel .group-tabs .group-tile strong {
+  display: block;
+  max-width: calc(100% - 52px);
   color: #f7fbff;
-  font-size: clamp(1.25rem, 1.8vw, 1.5rem);
+  font-size: 24px;
   font-weight: 800;
-  line-height: 1;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
 }
 
 .group-tile-badge {
   position: absolute;
-  inset: 0 0 auto auto;
-  display: grid;
+  top: 20px;
+  right: 20px;
+  display: flex;
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
-  place-items: center;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 50%;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   color: white;
   font-size: 1rem;
   font-weight: 900;
+  margin: 0;
+  transform: none;
 }
 
 .group-tile-flags {
   display: grid;
-  grid-template-columns: repeat(2, 86px) !important;
-  justify-content: center;
+  grid-template-columns: repeat(2, 1fr) !important;
   gap: 10px 12px;
   width: 100%;
+  max-width: 200px;
+  margin: 28px 0 0;
+  justify-items: stretch;
+  align-items: center;
 }
 
 .group-tile-flag,
 .group-tile-flag.flag {
   display: grid;
   width: 86px !important;
-  max-width: 86px !important;
-  height: 36px !important;
+  max-width: 100% !important;
+  height: 34px !important;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -110,8 +123,8 @@
 .group-tile-flag.flag img {
   display: block;
   width: 86px !important;
-  max-width: 86px !important;
-  height: 36px !important;
+  max-width: 100% !important;
+  height: 34px !important;
   object-fit: cover;
 }
 
@@ -150,13 +163,12 @@
   }
 
   .match-panel .group-tabs .group-tile {
-    height: 160px;
-    min-height: 0;
-    max-height: 160px;
+    min-height: 170px;
+    max-height: 190px;
   }
 
   .group-tile-flags {
-    grid-template-columns: repeat(2, 76px) !important;
+    max-width: 184px;
   }
 
   .group-tile-flag,
