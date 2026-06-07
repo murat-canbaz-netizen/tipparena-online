@@ -5,7 +5,8 @@
 }
 
 .match-panel .group-tabs {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   gap: clamp(20px, 2.2vw, 28px);
   width: 100%;
   max-width: 100%;
@@ -13,10 +14,12 @@
 }
 
 .match-panel .group-tabs .group-tile {
+  position: relative;
   display: grid;
   min-width: 0;
-  min-height: 150px;
-  max-height: 180px;
+  height: 170px;
+  min-height: 0;
+  max-height: 170px;
   align-content: space-between;
   gap: 12px;
   overflow: hidden;
@@ -48,6 +51,7 @@
 }
 
 .group-tile-head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -63,10 +67,12 @@
 }
 
 .group-tile-badge {
+  position: absolute;
+  inset: 0 0 auto auto;
   display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 50%;
@@ -78,7 +84,7 @@
 
 .group-tile-flags {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 96px));
+  grid-template-columns: repeat(2, 86px) !important;
   justify-content: center;
   gap: 10px 12px;
   width: 100%;
@@ -87,9 +93,9 @@
 .group-tile-flag,
 .group-tile-flag.flag {
   display: grid;
-  width: 100%;
-  max-width: 96px;
-  height: 36px;
+  width: 86px !important;
+  max-width: 86px !important;
+  height: 36px !important;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -103,9 +109,9 @@
 .group-tile-flag img,
 .group-tile-flag.flag img {
   display: block;
-  width: 100%;
-  max-width: 96px;
-  height: 36px;
+  width: 86px !important;
+  max-width: 86px !important;
+  height: 36px !important;
   object-fit: cover;
 }
 
@@ -134,29 +140,31 @@
 
 @media (max-width: 900px) {
   .match-panel .group-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
 @media (max-width: 560px) {
   .match-panel .group-tabs {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .match-panel .group-tabs .group-tile {
-    min-height: 150px;
-    max-height: 180px;
+    height: 160px;
+    min-height: 0;
+    max-height: 160px;
   }
 
   .group-tile-flags {
-    grid-template-columns: repeat(2, minmax(0, 86px));
+    grid-template-columns: repeat(2, 76px) !important;
   }
 
   .group-tile-flag,
   .group-tile-flag.flag,
   .group-tile-flag img,
   .group-tile-flag.flag img {
-    max-width: 86px;
-    height: 34px;
+    width: 76px !important;
+    max-width: 76px !important;
+    height: 34px !important;
   }
 }
