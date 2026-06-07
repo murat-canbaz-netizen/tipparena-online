@@ -41,7 +41,7 @@ export async function supabase(env, path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-function cleanString(value, fallback = "") {
+export function cleanString(value, fallback = "") {
   return String(value || fallback).trim().slice(0, 120);
 }
 
