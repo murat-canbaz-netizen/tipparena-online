@@ -1,32 +1,36 @@
-/* Group overview cards. Existing data-group buttons keep the original behavior. */
+/* Compact group selection dashboard. The entire data-group card stays clickable. */
 .match-panel .panel-toolbar {
   grid-template-columns: 1fr;
   align-items: start;
 }
 
-.group-tabs {
+.match-panel .group-tabs {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
   overflow: visible;
 }
 
-.group-tabs .group-tile {
+.match-panel .group-tabs .group-tile {
+  position: relative;
   display: grid;
   min-width: 0;
-  min-height: 210px;
+  min-height: 150px;
+  max-height: 170px;
   align-content: space-between;
-  gap: 16px;
+  gap: 18px;
   overflow: hidden;
-  border: 1px solid #dce5ef;
-  border-radius: 20px;
-  padding: 18px;
+  border: 1px solid #dce4ed;
+  border-radius: 18px;
+  padding: 17px;
   background:
-    radial-gradient(circle at 92% 4%, rgba(47, 123, 215, 0.1), transparent 38%),
-    linear-gradient(145deg, #ffffff, #f5f8fc);
+    radial-gradient(circle at 92% 4%, rgba(47, 123, 215, 0.09), transparent 42%),
+    linear-gradient(145deg, #ffffff, #f5f8fb);
   color: #111827;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 14px 30px rgba(17, 24, 39, 0.09);
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 10px 24px rgba(17, 24, 39, 0.08);
   text-align: left;
   transition:
     border-color 180ms ease,
@@ -34,89 +38,104 @@
     transform 180ms ease;
 }
 
-.group-tabs .group-tile:hover {
-  border-color: rgba(47, 123, 215, 0.36);
-  transform: translateY(-3px);
-  box-shadow: 0 18px 36px rgba(17, 24, 39, 0.13);
+.match-panel .group-tabs .group-tile::after {
+  content: "";
+  position: absolute;
+  inset: auto 17px 0;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, transparent, rgba(47, 123, 215, 0.36), transparent);
 }
 
-.group-tabs .group-tile strong {
-  font-size: 1.2rem;
+.match-panel .group-tabs .group-tile:hover,
+.match-panel .group-tabs .group-tile:focus-visible {
+  border-color: rgba(47, 123, 215, 0.34);
+  outline: none;
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 16px 30px rgba(17, 24, 39, 0.12);
+}
+
+.match-panel .group-tabs .group-tile strong {
+  font-size: 1.08rem;
   line-height: 1;
 }
 
 .group-tile-flags {
   display: grid;
-  grid-template-columns: repeat(2, 46px);
+  grid-template-columns: repeat(4, 40px);
   justify-content: center;
-  gap: 10px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
 }
 
-.group-tile-flag {
+.group-tile-flag,
+.group-tile-flag.flag {
   display: grid;
-  width: 46px;
-  height: 34px;
+  width: 40px;
+  height: 29px;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   place-items: center;
-  border: 2px solid white;
-  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.94);
+  border-radius: 7px;
   background: white;
-  box-shadow: 0 7px 14px rgba(17, 24, 39, 0.14);
+  box-shadow: 0 5px 11px rgba(17, 24, 39, 0.14);
 }
 
-.group-tile-flag img {
+.group-tile-flag img,
+.group-tile-flag.flag img {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 40px;
+  height: 29px;
+  max-width: 40px;
   object-fit: cover;
 }
 
 .group-tile-flag span {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
-.group-tile-action {
-  display: grid;
-  min-height: 48px;
-  place-items: center;
-  border-radius: 12px;
-  background: #eaf2fb;
-  color: #1e5f9f;
-  font-size: 0.94rem;
-  font-weight: 950;
-  text-align: center;
-}
-
-.group-tabs .group-tile.is-active {
-  border-color: rgba(184, 255, 77, 0.72);
+.match-panel .group-tabs .group-tile.is-active {
+  border-color: rgba(184, 255, 77, 0.7);
   background:
-    radial-gradient(circle at 80% 6%, rgba(184, 255, 77, 0.23), transparent 40%),
-    linear-gradient(145deg, #0a111d, #162438);
+    radial-gradient(circle at 84% 8%, rgba(184, 255, 77, 0.2), transparent 42%),
+    linear-gradient(145deg, #0a111c, #17263a);
   color: white;
   box-shadow:
-    inset 0 0 0 1px rgba(184, 255, 77, 0.12),
-    0 0 28px rgba(184, 255, 77, 0.18),
-    0 20px 38px rgba(17, 24, 39, 0.24);
+    inset 0 0 0 1px rgba(184, 255, 77, 0.1),
+    0 0 22px rgba(184, 255, 77, 0.16),
+    0 15px 30px rgba(17, 24, 39, 0.22);
 }
 
-.group-tabs .group-tile.is-active .group-tile-action {
-  background: linear-gradient(135deg, var(--lime), #42d77b);
-  color: #07100c;
-  box-shadow: 0 10px 22px rgba(184, 255, 77, 0.18);
+.match-panel .group-tabs .group-tile.is-active::after {
+  background: linear-gradient(90deg, transparent, var(--lime), transparent);
+  box-shadow: 0 0 12px rgba(184, 255, 77, 0.42);
 }
 
 @media (min-width: 768px) and (max-width: 1000px) {
-  .group-tabs {
+  .match-panel .group-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1180px) and (orientation: portrait) {
+  .match-panel .group-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 767px) {
-  .group-tabs {
+  .match-panel .group-tabs {
     grid-template-columns: 1fr;
   }
 
-  .group-tabs .group-tile {
-    min-height: 190px;
+  .match-panel .group-tabs .group-tile {
+    min-height: 142px;
+    max-height: 160px;
   }
 }

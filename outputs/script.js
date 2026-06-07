@@ -867,7 +867,6 @@ function renderGroupTabs() {
         <button class="group-tile ${group === classState.activeGroup ? "is-active" : ""}" type="button" data-group="${group}">
           <strong>Gruppe ${group}</strong>
           <span class="group-tile-flags">${groupFlags}</span>
-          <span class="group-tile-action">Zur Gruppe</span>
         </button>
       `;
     })
