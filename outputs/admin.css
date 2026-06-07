@@ -1,0 +1,122 @@
+body:not(.is-superadmin) .superadmin-section {
+  display: none;
+}
+
+body.is-superadmin .topbar,
+body.is-superadmin .hero,
+body.is-superadmin .app-class-header,
+body.is-superadmin .arena-section,
+body.is-superadmin .leaderboard-section,
+body.is-superadmin .admin-section,
+body.is-superadmin footer {
+  display: none;
+}
+
+body.is-superadmin .superadmin-section {
+  display: block;
+  min-height: 100vh;
+  padding-top: clamp(44px, 7vw, 86px);
+  background: #f4f7fb;
+}
+
+.superadmin-shell {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+}
+
+.superadmin-access {
+  display: grid;
+  grid-template-columns: minmax(240px, 420px) auto;
+  gap: 12px;
+  align-items: end;
+  max-width: 680px;
+  margin-bottom: 28px;
+}
+
+.superadmin-access .button {
+  min-height: 50px;
+}
+
+.superadmin-message {
+  grid-column: 1 / -1;
+  min-height: 22px;
+  margin: 0;
+  color: #657184;
+  font-weight: 800;
+}
+
+.superadmin-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.superadmin-stats article {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dce3ec;
+  border-radius: 12px;
+  padding: 22px;
+  background: white;
+  box-shadow: 0 16px 42px rgba(17, 24, 39, 0.08);
+}
+
+.superadmin-stats span {
+  color: #657184;
+  font-weight: 850;
+}
+
+.superadmin-stats strong {
+  color: #111827;
+  font-size: 2.4rem;
+}
+
+.superadmin-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dce3ec;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 16px 42px rgba(17, 24, 39, 0.08);
+}
+
+.superadmin-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #111827;
+}
+
+.superadmin-table th,
+.superadmin-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e7edf4;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.superadmin-table th {
+  background: #111827;
+  color: #b8ff4d;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.superadmin-table code {
+  color: #2f7bd7;
+  font-weight: 800;
+}
+
+.superadmin-empty {
+  border: 1px solid #dce3ec;
+  border-radius: 12px;
+  padding: 24px;
+  background: white;
+  color: #657184;
+}
+
+@media (max-width: 760px) {
+  .superadmin-access,
+  .superadmin-stats {
+    grid-template-columns: 1fr;
+  }
+}
