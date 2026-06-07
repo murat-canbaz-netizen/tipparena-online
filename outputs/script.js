@@ -487,7 +487,7 @@ async function syncRoom() {
 
 async function syncPicks() {
   if (!classState.code) return;
-  const data = await apiRequest(`picks?room=${encodeURIComponent(classState.code)}`);
+  const data = await apiRequest("picks", {}, `/api/picks?room=${encodeURIComponent(classState.code)}`);
   if (!data || data.error) return;
   remoteState.players = data.players || remoteState.players;
   setRemotePicks(data.picks || []);
@@ -541,7 +541,7 @@ function applyLiveFixture(fixture) {
 
 async function syncResults() {
   try {
-    const response = await fetch("/.netlify/functions/results");
+    const response = await fetch("/api/results");
     if (!response.ok) return;
     const data = await response.json();
     let changed = false;
@@ -571,18 +571,22 @@ async function createRemoteRoom(room) {
 }
 
 async function createRemotePlayer(nickname, avatar) {
-  const data = await apiRequest("player", {
-    method: "POST",
-    body: JSON.stringify({
-      roomCode: classState.code,
-      school: classState.school,
-      className: classState.className,
-      studentCount: classState.studentCount,
-      nickname,
-      avatar,
-      playerId: classState.playerId,
-    }),
-  });
+  const data = await apiRequest(
+    "player",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        roomCode: classState.code,
+        school: classState.school,
+        className: classState.className,
+        studentCount: classState.studentCount,
+        nickname,
+        avatar,
+        playerId: classState.playerId,
+      }),
+    },
+    "/api/player",
+  );
   if (!data?.player) return data;
   applyRoom(data.room);
   classState.playerId = data.player.id;
@@ -602,16 +606,20 @@ function saveRemotePick(matchId) {
     matchId,
     setTimeout(async () => {
       const pick = userPicks[matchId] || [0, 0];
-      const data = await apiRequest("picks", {
-        method: "POST",
-        body: JSON.stringify({
-          roomCode: classState.code,
-          playerId: classState.playerId,
-          matchId,
-          homeScore: pick[0],
-          awayScore: pick[1],
-        }),
-      });
+      const data = await apiRequest(
+        "picks",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            roomCode: classState.code,
+            playerId: classState.playerId,
+            matchId,
+            homeScore: pick[0],
+            awayScore: pick[1],
+          }),
+        },
+        "/api/picks",
+      );
       if (data?.picks) {
         await syncPicks();
       }
@@ -634,14 +642,18 @@ async function saveAllRemotePicks() {
     homeScore: pick[0],
     awayScore: pick[1],
   }));
-  await apiRequest("picks", {
-    method: "POST",
-    body: JSON.stringify({
-      roomCode: classState.code,
-      playerId: classState.playerId,
-      picks,
-    }),
-  });
+  await apiRequest(
+    "picks",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        roomCode: classState.code,
+        playerId: classState.playerId,
+        picks,
+      }),
+    },
+    "/api/picks",
+  );
   await syncPicks();
 }
 
