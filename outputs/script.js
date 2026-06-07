@@ -856,13 +856,21 @@ function teamMarkup(name, side) {
 function renderGroupTabs() {
   const groups = [...new Set(matches.map((match) => match.group))];
   groupTabs.innerHTML = groups
-    .map(
-      (group) => `
-        <button class="${group === classState.activeGroup ? "is-active" : ""}" type="button" data-group="${group}">
-          Gruppe ${group}
+    .map((group) => {
+      const teams = [...new Set(matches
+        .filter((match) => match.group === group)
+        .flatMap((match) => [match.home, match.away]))];
+      const groupFlags = teams
+        .map((team) => `<span class="group-tile-flag" title="${team}">${flagMarkup(team, false)}</span>`)
+        .join("");
+      return `
+        <button class="group-tile ${group === classState.activeGroup ? "is-active" : ""}" type="button" data-group="${group}">
+          <strong>Gruppe ${group}</strong>
+          <span class="group-tile-flags">${groupFlags}</span>
+          <span class="group-tile-action">Zur Gruppe</span>
         </button>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
