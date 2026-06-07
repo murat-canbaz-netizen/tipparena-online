@@ -317,6 +317,8 @@ const remoteState = {
   picksByPlayer: {},
 };
 const pendingPickTimers = new Map();
+let liveResultsTimer = null;
+let liveResultsRequestPending = false;
 
 const heroJoinForm = document.querySelector("#heroJoinForm");
 const teacherLinkForm = document.querySelector("#teacherLinkForm");
@@ -539,11 +541,37 @@ function applyLiveFixture(fixture) {
   return true;
 }
 
+function scheduleLiveResultsUpdate(delay) {
+  clearTimeout(liveResultsTimer);
+  liveResultsTimer = setTimeout(syncResults, delay);
+}
+
+function showLiveResultsNotice() {
+  if (!arenaStatus) return;
+  let notice = arenaStatus.querySelector(".live-results-notice");
+  if (!notice) {
+    notice = document.createElement("small");
+    notice.className = "live-results-notice";
+    arenaStatus.append(notice);
+  }
+  notice.textContent = "Live-Ergebnisse werden später aktualisiert.";
+}
+
 async function syncResults() {
+  if (liveResultsRequestPending) return;
+  liveResultsRequestPending = true;
   try {
     const response = await fetch("/api/results");
-    if (!response.ok) return;
     const data = await response.json();
+    if (response.status === 429) {
+      showLiveResultsNotice();
+      scheduleLiveResultsUpdate(Math.max(600, Number(data.retryAfterSeconds || 600)) * 1000);
+      return;
+    }
+    if (!response.ok) {
+      scheduleLiveResultsUpdate(900_000);
+      return;
+    }
     let changed = false;
     (data.fixtures || []).forEach((fixture) => {
       changed = applyLiveFixture(fixture) || changed;
@@ -552,8 +580,11 @@ async function syncResults() {
       renderMatches();
       renderLeaderboard();
     }
+    scheduleLiveResultsUpdate(data.hasLiveMatches ? 300_000 : 900_000);
   } catch {
-    // Live results are optional until the server-side integration is configured.
+    scheduleLiveResultsUpdate(900_000);
+  } finally {
+    liveResultsRequestPending = false;
   }
 }
 
@@ -1380,4 +1411,3 @@ syncRoom().then(syncPicks);
 syncResults();
 
 setInterval(updateCountdowns, 1000);
-setInterval(syncResults, 300_000);
