@@ -865,7 +865,10 @@ function renderGroupTabs() {
         .join("");
       return `
         <button class="group-tile ${group === classState.activeGroup ? "is-active" : ""}" type="button" data-group="${group}">
-          <strong>Gruppe ${group}</strong>
+          <span class="group-tile-head">
+            <strong>Gruppe ${group}</strong>
+            <span class="group-tile-badge" aria-hidden="true">${group}</span>
+          </span>
           <span class="group-tile-flags">${groupFlags}</span>
         </button>
       `;
