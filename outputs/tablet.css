@@ -1,0 +1,46 @@
+/* Tablet classroom layout: generous touch targets without changing app behavior. */
+@media (min-width: 768px) and (max-width: 1180px) {
+  body { font-size: 17px; }
+  .topbar { position: fixed; inset: 0 0 auto; min-height: 72px; align-items: center; flex-direction: row; justify-content: center; padding: 10px 24px; }
+  body.is-authenticated .topbar { justify-content: center; }
+  .app-nav { width: min(100%, 760px); flex-wrap: nowrap; justify-content: center; gap: 10px; }
+  .app-nav a, .home-tabs button, .button, .group-tabs button { min-height: 52px; }
+  .app-nav a { display: grid; min-width: 150px; place-items: center; padding: 10px 22px; text-align: center; }
+  section:not(.hero) { padding-inline: clamp(24px, 4vw, 44px); }
+  .app-class-header { padding: 96px clamp(24px, 4vw, 44px) 0; }
+  .hero { min-height: 100svh; padding: 104px 24px 36px; }
+  .hero-join { width: min(100%, 820px); padding: 20px; }
+  input { min-height: 56px; font-size: 1.08rem; }
+  #heroJoinForm .image-avatar-studio { grid-template-columns: minmax(160px, .72fr) minmax(340px, 1.28fr); gap: 22px; padding: 22px; }
+  #heroJoinForm .image-avatar-preview { width: min(100%, 170px); }
+  #heroJoinForm .image-avatar-grid { grid-template-columns: repeat(3, minmax(82px, 1fr)); gap: 12px; }
+  #heroJoinForm .random-avatar-tile::before { font-size: 3.4rem; }
+  .class-hero-card { padding: 24px; }
+  .arena-layout { grid-template-columns: 1fr; overflow: visible; }
+  .panel { padding: 24px; }
+  .panel-toolbar { grid-template-columns: 1fr; }
+  .group-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; overflow: visible; }
+  .group-tabs button { padding-inline: 14px; font-size: 1rem; }
+  .match-list, .grouped-matches { gap: 16px; }
+  .match-card { grid-template-columns: minmax(0, 1fr) minmax(210px, auto); gap: 20px; min-height: 124px; padding: 20px; border-radius: 14px; }
+  .match-teams { font-size: 1.16rem; }
+  .pick-box { gap: 14px; }
+  .score-inputs { gap: 10px; }
+  .score-inputs input { width: 72px; min-height: 62px; border-radius: 12px; font-size: 1.35rem; }
+  .side-stack { grid-template-columns: 1fr; }
+  .points-panel ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .leaderboard-section .section-heading h2 { white-space: normal; }
+  .leaderboard { max-width: none; }
+  .leader-row { grid-template-columns: 84px minmax(220px, 1fr) 86px 126px; gap: 14px; min-height: 88px; padding: 18px; border-radius: 14px; }
+  .leader-player strong { font-size: 1.18rem; }
+  .leader-points { padding: 11px 13px; font-size: 1.05rem; }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  .topbar { align-items: center; flex-direction: row; }
+  .app-nav a { min-width: 0; flex: 1; }
+  .match-card { grid-template-columns: 1fr; }
+  .pick-box { justify-content: space-between; }
+  .points-panel ul { grid-template-columns: 1fr; }
+  .leader-row { grid-template-columns: 68px minmax(180px, 1fr) 76px 112px; gap: 10px; }
+}
