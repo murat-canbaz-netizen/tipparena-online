@@ -861,15 +861,15 @@ function renderGroupTabs() {
         .filter((match) => match.group === group)
         .flatMap((match) => [match.home, match.away]))];
       const groupFlags = teams
-        .map((team) => `<span class="group-tile-flag" title="${team}">${flagMarkup(team, false)}</span>`)
+        .map((team) => `<span class="group-card__flag" title="${team}">${flagMarkup(team, false)}</span>`)
         .join("");
       return `
-        <button class="group-tile ${group === classState.activeGroup ? "is-active" : ""}" type="button" data-group="${group}">
-          <span class="group-tile-head">
-            <strong>Gruppe ${group}</strong>
-            <span class="group-tile-badge" aria-hidden="true">${group}</span>
+        <button class="group-card ${group === classState.activeGroup ? "group-card--active is-active" : ""}" type="button" data-group="${group}">
+          <span class="group-card__top">
+            <strong class="group-card__title">Gruppe ${group}</strong>
+            <span class="group-card__badge" aria-hidden="true">${group}</span>
           </span>
-          <span class="group-tile-flags">${groupFlags}</span>
+          <span class="group-card__flags">${groupFlags}</span>
         </button>
       `;
     })
