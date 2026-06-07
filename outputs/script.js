@@ -821,6 +821,7 @@ function scorePick(pick, result) {
   const pickDiff = homePick - awayPick;
   const resultDiff = homeResult - awayResult;
   if (homePick === homeResult && awayPick === awayResult) return 3;
+  if (resultDiff === 0) return pickDiff === 0 ? 1 : 0;
   if (pickDiff === resultDiff) return 2;
   if (Math.sign(pickDiff) === Math.sign(resultDiff)) return 1;
   return 0;
