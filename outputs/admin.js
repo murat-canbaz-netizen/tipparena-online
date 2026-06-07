@@ -56,28 +56,84 @@ function renderSuperAdmin(data) {
     : '<p class="superadmin-empty">Noch keine Klassenräume vorhanden.</p>';
 }
 
+async function loadAdminOverview(adminCode) {
+  const response = await fetch("/api/admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ adminCode }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Adminbereich konnte nicht geladen werden.");
+  renderSuperAdmin(data);
+}
+
+function addDangerZone() {
+  if (!superAdminSection || document.querySelector("#superAdminResetForm")) return;
+  const dangerZone = document.createElement("section");
+  dangerZone.className = "superadmin-danger-zone";
+  dangerZone.innerHTML = `
+    <div>
+      <span>Gefahr-Zone</span>
+      <h3>Alle Klassenräume vollständig löschen</h3>
+      <p>Entfernt alle Räume, Spieler, Tipps und Lehrer-Zuordnungen unwiderruflich.</p>
+    </div>
+    <form id="superAdminResetForm">
+      <label>Admin-Code<input name="adminCode" type="password" autocomplete="current-password" required /></label>
+      <label>Zur Bestätigung RESET eingeben<input name="confirmation" autocomplete="off" required /></label>
+      <button class="superadmin-delete-button" type="submit">Alle Räume löschen</button>
+      <p id="superAdminResetMessage" role="status"></p>
+    </form>
+  `;
+  superAdminSection.querySelector(".superadmin-shell")?.append(dangerZone);
+
+  dangerZone.querySelector("#superAdminResetForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const adminCode = String(formData.get("adminCode") || "");
+    const confirmation = String(formData.get("confirmation") || "");
+    const message = dangerZone.querySelector("#superAdminResetMessage");
+
+    if (confirmation !== "RESET") {
+      message.textContent = "Bitte RESET exakt eingeben.";
+      return;
+    }
+    if (!window.confirm("Bist du sicher? Alle Räume, Spieler und Tipps werden gelöscht.")) return;
+
+    message.textContent = "Alle Daten werden gelöscht...";
+    try {
+      const response = await fetch("/api/admin-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminCode, confirmation }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        message.textContent = data.error || "Löschen ist fehlgeschlagen.";
+        return;
+      }
+      await loadAdminOverview(adminCode);
+      message.textContent = `${data.deletedRooms} Räume, ${data.deletedPlayers} Spieler und ${data.deletedPicks} Tipps gelöscht.`;
+      form.reset();
+    } catch (error) {
+      message.textContent = error.message || "Löschen ist fehlgeschlagen.";
+    }
+  });
+}
+
 superAdminForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const adminCode = String(new FormData(superAdminForm).get("adminCode") || "");
   superAdminMessage.textContent = "Übersicht wird geladen...";
   try {
-    const response = await fetch("/api/admin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adminCode }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      superAdminMessage.textContent = data.error || "Adminbereich konnte nicht geladen werden.";
-      return;
-    }
+    await loadAdminOverview(adminCode);
     superAdminMessage.textContent = "Private Übersicht geladen.";
-    renderSuperAdmin(data);
     superAdminForm.reset();
-  } catch {
-    superAdminMessage.textContent = "Adminbereich ist momentan nicht erreichbar.";
+  } catch (error) {
+    superAdminMessage.textContent = error.message || "Adminbereich ist momentan nicht erreichbar.";
   }
 });
 
 window.addEventListener("hashchange", updateSuperAdminView);
+addDangerZone();
 updateSuperAdminView();
