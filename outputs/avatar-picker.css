@@ -139,7 +139,6 @@
 #heroJoinForm .random-avatar-tile {
   grid-column: auto;
   grid-template-columns: 1fr;
-  gap: 3px;
   align-content: center;
   color: white;
   font: inherit;
@@ -150,41 +149,14 @@
 #heroJoinForm .random-avatar-tile::before {
   content: "?";
   display: block;
-  width: auto;
-  height: auto;
-  border-radius: 0;
-  background: none;
   color: var(--lime);
-  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-size: clamp(2.6rem, 6vw, 4rem);
   font-weight: 950;
   line-height: 1;
-  box-shadow: none;
+  text-shadow: 0 0 20px rgba(184, 255, 77, 0.42);
 }
 
-#heroJoinForm .random-avatar-tile span {
-  display: block;
-  min-width: 0;
-}
-
-#heroJoinForm .random-avatar-tile span b {
-  display: block;
-  width: auto;
-  max-width: 100%;
-  min-height: 0;
-  aspect-ratio: auto;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  background: none;
-  box-shadow: none;
-  color: white;
-  font-size: clamp(0.68rem, 1.6vw, 0.82rem);
-  line-height: 1.1;
-  transform: none;
-}
-
-#heroJoinForm .random-avatar-tile small {
+#heroJoinForm .random-avatar-tile > * {
   display: none;
 }
 
