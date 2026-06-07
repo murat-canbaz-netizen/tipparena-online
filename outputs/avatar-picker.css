@@ -1,8 +1,8 @@
-/* Responsive login-only avatar picker. */
+/* Stable two-column login avatar picker. */
 #heroJoinForm .image-avatar-studio {
-  position: relative;
+  position: static;
   display: grid;
-  grid-template-columns: minmax(170px, 210px) minmax(0, 1fr);
+  grid-template-columns: minmax(170px, 0.75fr) minmax(280px, 1.25fr);
   gap: clamp(18px, 3vw, 28px);
   align-items: center;
   width: 100%;
@@ -36,8 +36,8 @@
 }
 
 #heroJoinForm .image-avatar-preview {
-  position: relative;
-  width: min(100%, 200px);
+  position: static;
+  width: min(100%, 180px);
   aspect-ratio: 1;
   height: auto;
   min-height: 0;
@@ -49,11 +49,13 @@
     radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.32), transparent 28%),
     radial-gradient(circle at 28% 76%, rgba(184, 255, 77, 0.28), transparent 40%),
     linear-gradient(145deg, rgba(184, 255, 77, 0.22), rgba(47, 123, 215, 0.26) 48%, rgba(8, 13, 22, 0.98));
-  box-shadow:
-    inset 0 0 0 5px rgba(255, 255, 255, 0.05),
-    0 0 0 5px rgba(184, 255, 77, 0.07),
-    0 0 34px rgba(184, 255, 77, 0.22),
-    0 22px 42px rgba(0, 0, 0, 0.38);
+  box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.05), 0 0 0 5px rgba(184, 255, 77, 0.07), 0 0 30px rgba(184, 255, 77, 0.2), 0 20px 38px rgba(0, 0, 0, 0.36);
+  transform: none;
+}
+
+#heroJoinForm .image-avatar-preview::before,
+#heroJoinForm .image-avatar-preview::after {
+  content: none;
 }
 
 #heroJoinForm .image-avatar-preview img {
@@ -63,61 +65,67 @@
   object-fit: contain;
   object-position: center;
   transform: none;
-  filter: saturate(1.06) contrast(1.03) drop-shadow(0 14px 16px rgba(0, 0, 0, 0.32));
+  filter: saturate(1.06) contrast(1.03) drop-shadow(0 12px 14px rgba(0, 0, 0, 0.3));
 }
 
 #heroJoinForm .avatar-controls {
   display: grid;
   min-width: 0;
   width: 100%;
+  max-width: 100%;
   gap: 12px;
   align-content: center;
+  overflow: visible;
 }
 
 #heroJoinForm .image-avatar-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(58px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   justify-content: stretch;
+  overflow: visible;
 }
 
 #heroJoinForm .image-avatar-grid label {
+  display: block;
   min-width: 0;
+  max-width: 100%;
 }
 
-#heroJoinForm .image-avatar-grid b {
+#heroJoinForm .image-avatar-grid label b {
   display: grid;
   width: 100%;
+  max-width: 100%;
   height: auto;
   min-height: 0;
   aspect-ratio: 1;
   overflow: hidden;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 20px;
+  border-radius: 18px;
   padding: 4px;
-  background:
-    radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.22), transparent 30%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(13, 21, 34, 0.82));
+  background: radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.22), transparent 30%), linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(13, 21, 34, 0.82));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), 0 10px 22px rgba(0, 0, 0, 0.2);
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transform: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
-#heroJoinForm .image-avatar-grid b:hover {
-  transform: translateY(-3px);
+#heroJoinForm .image-avatar-grid label b:hover {
+  transform: none;
   border-color: rgba(184, 255, 77, 0.58);
-  box-shadow: 0 0 20px rgba(184, 255, 77, 0.16), 0 14px 26px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 0 18px rgba(184, 255, 77, 0.16), 0 12px 24px rgba(0, 0, 0, 0.24);
 }
 
 #heroJoinForm .image-avatar-grid input:checked + b {
-  transform: translateY(-2px);
+  transform: none;
   border-color: var(--lime);
-  box-shadow: 0 0 0 3px rgba(184, 255, 77, 0.15), 0 0 24px rgba(184, 255, 77, 0.3), 0 14px 28px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 3px rgba(184, 255, 77, 0.15), 0 0 22px rgba(184, 255, 77, 0.28), 0 12px 26px rgba(0, 0, 0, 0.26);
 }
 
-#heroJoinForm .image-avatar-grid img {
+#heroJoinForm .image-avatar-grid label img {
   display: block;
   width: 100%;
   height: 100%;
@@ -129,47 +137,52 @@
 #heroJoinForm .random-avatar-tile {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr);
   gap: 11px;
   align-items: center;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
-  min-height: 62px;
+  min-height: 58px;
   border: 1px solid rgba(184, 255, 77, 0.34);
-  border-radius: 20px;
-  padding: 8px 14px 8px 9px;
-  overflow: hidden;
+  border-radius: 18px;
+  padding: 8px 13px 8px 9px;
+  overflow: visible;
   background: radial-gradient(circle at 18% 24%, rgba(184, 255, 77, 0.2), transparent 34%), linear-gradient(135deg, rgba(19, 32, 49, 0.96), rgba(9, 18, 28, 0.98));
   color: white;
   font: inherit;
   text-align: left;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), 0 12px 24px rgba(0, 0, 0, 0.22);
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transform: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 #heroJoinForm .random-avatar-tile::before {
-  content: "⚄";
+  content: "?";
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 13px;
   background: linear-gradient(135deg, var(--lime), #42d77b);
   color: #07100c;
-  font-size: 1.55rem;
+  font-size: 1.3rem;
   font-weight: 950;
-  box-shadow: 0 8px 20px rgba(66, 215, 123, 0.22);
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(66, 215, 123, 0.22);
 }
 
 #heroJoinForm .random-avatar-tile span {
-  display: block;
+  display: grid;
   min-width: 0;
+  gap: 2px;
 }
 
-#heroJoinForm .random-avatar-tile b {
+#heroJoinForm .random-avatar-tile span b {
   display: block;
   width: auto;
+  max-width: 100%;
   min-height: 0;
   aspect-ratio: auto;
   overflow: visible;
@@ -179,22 +192,24 @@
   background: none;
   box-shadow: none;
   color: white;
-  font-size: 0.98rem;
+  font-size: 0.96rem;
+  line-height: 1.15;
   transform: none;
 }
 
 #heroJoinForm .random-avatar-tile small {
   display: block;
-  margin-top: 2px;
+  margin: 0;
   color: #b9c7d8;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 750;
+  line-height: 1.15;
 }
 
 #heroJoinForm .random-avatar-tile:hover {
-  transform: translateY(-2px);
+  transform: none;
   border-color: rgba(184, 255, 77, 0.7);
-  box-shadow: 0 0 22px rgba(184, 255, 77, 0.16), 0 16px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 20px rgba(184, 255, 77, 0.15), 0 14px 26px rgba(0, 0, 0, 0.26);
 }
 
 @media (max-width: 700px) {
@@ -203,16 +218,16 @@
   }
 
   #heroJoinForm .image-avatar-preview {
-    width: min(190px, 62vw);
+    width: min(170px, 56vw);
   }
 
   #heroJoinForm .image-avatar-grid {
-    grid-template-columns: repeat(4, minmax(52px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 460px) {
+@media (max-width: 420px) {
   #heroJoinForm .image-avatar-grid {
-    grid-template-columns: repeat(2, minmax(68px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
