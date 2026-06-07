@@ -1339,11 +1339,13 @@ avatarPreview?.addEventListener("pointerleave", () => {
   avatarPreview.style.setProperty("--avatar-rx", "0deg");
 });
 
-document.querySelector('[data-app-tab="rangliste"]')?.addEventListener("click", (event) => {
-  event.preventDefault();
-  history.pushState(null, "", `${window.location.pathname}${window.location.search}#rangliste`);
-  updateAppView();
-  window.scrollTo({ top: 0 });
+appTabs.forEach((tab) => {
+  tab.addEventListener("click", (event) => {
+    event.preventDefault();
+    history.pushState(null, "", `${window.location.pathname}${window.location.search}#${tab.dataset.appTab}`);
+    updateAppView();
+    window.scrollTo({ top: 0 });
+  });
 });
 
 window.addEventListener("hashchange", updateAppView);
