@@ -867,7 +867,6 @@ function renderGroupTabs() {
         <button class="group-card ${group === classState.activeGroup ? "group-card--active is-active" : ""}" type="button" data-group="${group}">
           <span class="group-card__top">
             <strong class="group-card__title">Gruppe ${group}</strong>
-            <span class="group-card__badge" aria-hidden="true">${group}</span>
           </span>
           <span class="group-card__flags">${groupFlags}</span>
         </button>
