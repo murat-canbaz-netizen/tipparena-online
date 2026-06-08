@@ -575,14 +575,11 @@ async function syncResults() {
       scheduleLiveResultsUpdate(900_000);
       return;
     }
-    let changed = false;
     (data.fixtures || []).forEach((fixture) => {
-      changed = applyLiveFixture(fixture) || changed;
+      applyLiveFixture(fixture);
     });
-    if (changed) {
-      renderMatches();
-      renderLeaderboard();
-    }
+    renderMatches();
+    renderLeaderboard();
     scheduleLiveResultsUpdate(data.rateLimited ? 600_000 : data.hasLiveMatches ? 300_000 : 900_000);
   } catch {
     scheduleLiveResultsUpdate(900_000);
@@ -604,6 +601,13 @@ async function refreshResultsNow() {
 }
 
 window.tipparenaRefreshResults = refreshResultsNow;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  refreshResultsNow().catch(() => {
+    scheduleLiveResultsUpdate(900_000);
+  });
+});
 
 async function createRemoteRoom(room) {
   const data = await apiRequest(
