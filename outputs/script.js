@@ -310,13 +310,13 @@ const demoNames = [
   "LinaPro",
 ];
 
-const userPicks = buildPicks(2);
+const userPicks = {};
+const draftPicks = {};
 const remoteState = {
   online: true,
   players: [],
   picksByPlayer: {},
 };
-const pendingPickTimers = new Map();
 let liveResultsTimer = null;
 let liveResultsRequestPending = false;
 
@@ -628,34 +628,27 @@ async function createRemotePlayer(nickname, avatar) {
   return data.player;
 }
 
-function saveRemotePick(matchId) {
-  if (!classState.code || !classState.playerId || !remoteState.online) return;
+async function saveRemotePick(matchId, pick) {
+  if (!classState.code || !classState.playerId || !remoteState.online) return false;
   const match = matches.find((entry) => entry.id === matchId);
-  if (!match || isMatchClosed(match)) return;
-  clearTimeout(pendingPickTimers.get(matchId));
-  pendingPickTimers.set(
-    matchId,
-    setTimeout(async () => {
-      const pick = userPicks[matchId] || [0, 0];
-      const data = await apiRequest(
-        "picks",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            roomCode: classState.code,
-            playerId: classState.playerId,
-            matchId,
-            homeScore: pick[0],
-            awayScore: pick[1],
-          }),
-        },
-        "/api/picks",
-      );
-      if (data?.picks) {
-        await syncPicks();
-      }
-    }, 350),
+  if (!match || isMatchClosed(match) || !pick) return false;
+  const data = await apiRequest(
+    "picks",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        roomCode: classState.code,
+        playerId: classState.playerId,
+        matchId,
+        homeScore: pick[0],
+        awayScore: pick[1],
+      }),
+    },
+    "/api/picks",
   );
+  if (!data?.picks) return false;
+  await syncPicks();
+  return true;
 }
 
 function showLockedMatchMessage(matchId) {
@@ -899,11 +892,17 @@ function renderMatches() {
 }
 
 function renderMatchCard(match) {
-  const pick = userPicks[match.id] || [0, 0];
-  const points = scorePick(pick, match.result);
+  const savedPick = userPicks[match.id];
+  const pick = draftPicks[match.id] || savedPick || [0, 0];
+  const isSaved = Boolean(savedPick);
+  const hasUnsavedChanges = isSaved && (pick[0] !== savedPick[0] || pick[1] !== savedPick[1]);
+  const points = scorePick(savedPick, match.result);
   const locked = isMatchClosed(match);
   const pointClass = match.result ? `points-${points}` : "";
   const bravo = points === 3 && match.result ? `<span class="bravo-badge">Bravo!</span>` : "";
+  const saveLabel = locked
+    ? isSaved ? "Gespeichert ✓" : "Nicht getippt"
+    : isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : "Tipp speichern";
   return `
     <article class="match-card ${match.status} ${locked ? "locked" : ""} ${pointClass}" data-match-card="${match.id}">
       <div class="match-meta">
@@ -931,6 +930,7 @@ function renderMatchCard(match) {
           <button class="score-step" type="button" aria-label="Tipp ${match.away} erhöhen" data-match="${match.id}" data-side="1" data-step="1" ${locked ? "disabled" : ""}>+</button>
         </div>
         <strong>${points} Pkt.</strong>
+        <button class="save-pick-button ${isSaved && !hasUnsavedChanges ? "is-saved" : ""}" type="button" data-save-pick="${match.id}" ${locked ? "disabled" : ""}>${saveLabel}</button>
         ${bravo}
       </div>
       ${locked ? `<p class="match-lock-message">Dieses Spiel kann nicht mehr getippt werden.</p>` : ""}
@@ -1380,10 +1380,13 @@ matchList.addEventListener("input", (event) => {
   const side = Number(field.dataset.side);
   field.value = field.value.replace(/\D/g, "").slice(0, 2);
   const value = field.value === "" ? 0 : Math.max(0, Math.min(20, Number(field.value)));
-  userPicks[matchId] = userPicks[matchId] || [0, 0];
-  userPicks[matchId][side] = value;
-  renderLeaderboard();
-  saveRemotePick(matchId);
+  draftPicks[matchId] = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
+  draftPicks[matchId][side] = value;
+  const saveButton = matchList.querySelector(`[data-save-pick="${matchId}"]`);
+  if (saveButton) {
+    saveButton.textContent = "Tipp speichern";
+    saveButton.classList.remove("is-saved");
+  }
 });
 
 matchList.addEventListener("focusout", (event) => {
@@ -1392,6 +1395,31 @@ matchList.addEventListener("focusout", (event) => {
 });
 
 matchList.addEventListener("click", (event) => {
+  const saveButton = event.target.closest("[data-save-pick]");
+  if (saveButton && !saveButton.disabled) {
+    const matchId = saveButton.dataset.savePick;
+    const match = matches.find((entry) => entry.id === matchId);
+    if (!match || isMatchClosed(match)) {
+      showLockedMatchMessage(matchId);
+      return;
+    }
+    const pickToSave = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
+    saveButton.disabled = true;
+    saveButton.textContent = "Wird gespeichert...";
+    saveRemotePick(matchId, pickToSave).then((saved) => {
+      if (!saved) {
+        saveButton.disabled = false;
+        saveButton.textContent = "Speichern fehlgeschlagen";
+        return;
+      }
+      userPicks[matchId] = pickToSave;
+      delete draftPicks[matchId];
+      renderMatches();
+      renderLeaderboard();
+    });
+    return;
+  }
+
   const button = event.target.closest(".score-step");
   if (!button || button.disabled) return;
   const matchId = button.dataset.match;
@@ -1402,11 +1430,9 @@ matchList.addEventListener("click", (event) => {
   }
   const side = Number(button.dataset.side);
   const step = Number(button.dataset.step);
-  userPicks[matchId] = userPicks[matchId] || [0, 0];
-  userPicks[matchId][side] = Math.max(0, Math.min(20, Number(userPicks[matchId][side] || 0) + step));
+  draftPicks[matchId] = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
+  draftPicks[matchId][side] = Math.max(0, Math.min(20, Number(draftPicks[matchId][side] || 0) + step));
   renderMatches();
-  renderLeaderboard();
-  saveRemotePick(matchId);
 });
 
 const params = new URLSearchParams(window.location.search);
