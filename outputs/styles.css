@@ -2016,17 +2016,14 @@ footer,
 
 .group-card .match-card.points-3::before {
   background:
-    radial-gradient(circle at 14% 18%, #f5c451 0 4px, transparent 5px),
-    radial-gradient(circle at 26% 72%, #b8ff4d 0 4px, transparent 5px),
-    radial-gradient(circle at 74% 20%, #69a8ff 0 4px, transparent 5px),
-    radial-gradient(circle at 88% 68%, #ffffff 0 3px, transparent 4px),
-    radial-gradient(circle at 58% 84%, #f5c451 0 3px, transparent 4px);
-  opacity: 0.48;
+    radial-gradient(circle at 12% 18%, rgba(255, 211, 92, 0.64) 0 3px, transparent 4px),
+    radial-gradient(circle at 86% 74%, rgba(71, 190, 125, 0.46) 0 3px, transparent 4px);
+  opacity: 0.52;
 }
 
 .group-card .match-card.points-3::after {
   border-radius: 8px;
-  box-shadow: inset 0 0 46px rgba(184, 255, 77, 0.18);
+  box-shadow: inset 0 0 38px rgba(73, 201, 133, 0.1);
 }
 
 .group-card .match-card.points-0 {
@@ -2051,11 +2048,12 @@ footer,
 }
 
 .group-card .match-card.points-3 {
-  border: 4px solid rgba(11, 104, 70, 0.95);
+  border: 3px solid rgba(66, 190, 124, 0.68);
   background:
-    linear-gradient(135deg, rgba(22, 138, 91, 0.94), rgba(14, 77, 59, 0.94)),
-    #168a5b;
-  color: white;
+    linear-gradient(135deg, rgba(239, 255, 246, 0.99), rgba(212, 250, 229, 0.96)),
+    #effff6;
+  color: #153d2b;
+  box-shadow: 0 16px 38px rgba(40, 174, 104, 0.18), 0 0 0 1px rgba(94, 211, 148, 0.12);
 }
 
 .group-card .match-card.points-3 .team strong,
@@ -2063,12 +2061,75 @@ footer,
 .group-card .match-card.points-3 .match-meta strong,
 .group-card .match-card.points-3 .pick-line > span,
 .group-card .match-card.points-3 .pick-line .score-inputs b {
-  color: white;
+  color: #153d2b;
 }
 
 .group-card .match-card.points-3 .pick-line {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(66, 190, 124, 0.28);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.group-card .match-card.points-3 .bravo-badge {
+  background: rgba(34, 150, 92, 0.12);
+  color: #157448;
+}
+
+.exact-points-badge {
+  background: linear-gradient(135deg, #157f4d, #24a866) !important;
+  color: white !important;
+  box-shadow: 0 8px 22px rgba(30, 159, 94, 0.28) !important;
+}
+
+.exact-points-badge.is-new-exact {
+  animation: exactBadgePop 0.58s ease-out both;
+}
+
+.exact-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.exact-confetti i {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  width: 7px;
+  height: 11px;
+  border-radius: 3px;
+  background: hsl(calc(var(--piece) * 47) 72% 58%);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(0);
+  animation: exactConfetti 1.25s cubic-bezier(0.2, 0.75, 0.3, 1) calc(var(--piece) * 28ms) both;
+}
+
+@keyframes exactBadgePop {
+  0% { transform: scale(0.84); }
+  62% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes exactConfetti {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0);
+  }
+  14% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rotation));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exact-points-badge,
+  .exact-confetti i {
+    animation: none;
+  }
 }
 
 .move {

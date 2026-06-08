@@ -314,6 +314,13 @@ const demoNames = [
 
 const userPicks = {};
 const draftPicks = {};
+const exactCelebrationStorageKey = "tipparenaExactCelebrations";
+const confettiPaths = [
+  [-112, 74, -150], [-88, 112, 120], [-64, 58, 210], [-42, 126, -90],
+  [-18, 86, 170], [14, 132, -210], [36, 68, 110], [58, 118, -160],
+  [78, 82, 220], [96, 126, -100], [116, 62, 150], [132, 104, -230],
+];
+const exactCelebrations = new Set(loadExactCelebrations());
 const remoteState = {
   online: true,
   players: [],
@@ -857,6 +864,35 @@ function scorePick(pick, result) {
   return 0;
 }
 
+function loadExactCelebrations() {
+  try {
+    return JSON.parse(sessionStorage.getItem(exactCelebrationStorageKey) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function rememberExactCelebrations() {
+  try {
+    sessionStorage.setItem(exactCelebrationStorageKey, JSON.stringify([...exactCelebrations]));
+  } catch {
+    // The in-memory Set still prevents repeated celebrations during this page session.
+  }
+}
+
+function exactCelebrationMarkup(match, points) {
+  if (points !== 3 || !match.result) return "";
+  const celebrationId = `${classState.code}:${classState.playerId || classState.joinedName}:${match.id}`;
+  if (exactCelebrations.has(celebrationId)) return "";
+  exactCelebrations.add(celebrationId);
+  rememberExactCelebrations();
+  return `
+    <span class="exact-confetti" aria-hidden="true">
+      ${confettiPaths.map(([x, y, rotation], index) => `<i style="--piece:${index};--dx:${x}px;--dy:${y}px;--rotation:${rotation}deg"></i>`).join("")}
+    </span>
+  `;
+}
+
 function totalPoints(picks) {
   return matches.reduce((sum, match) => sum + scorePick(picks[match.id], match.result), 0);
 }
@@ -937,11 +973,14 @@ function renderMatchCard(match) {
   const locked = isMatchClosed(match);
   const pointClass = match.result ? `points-${points}` : "";
   const bravo = points === 3 && match.result ? `<span class="bravo-badge">Bravo!</span>` : "";
+  const celebration = exactCelebrationMarkup(match, points);
+  const newExactSuccess = Boolean(celebration);
+  const pointsLabel = points === 3 ? "3 Pkt. 🎉" : `${points} Pkt.`;
   const saveLabel = locked
     ? isSaved ? "Gespeichert ✓" : "Nicht getippt"
     : isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : "Tipp speichern";
   return `
-    <article class="match-card ${match.status} ${locked ? "locked" : ""} ${pointClass}" data-match-card="${match.id}">
+    <article class="match-card ${match.status} ${locked ? "locked" : ""} ${pointClass} ${newExactSuccess ? "new-exact-success" : ""}" data-match-card="${match.id}">
       <div class="match-meta">
         <div class="match-kickoff">
           <span>${match.date}</span>
@@ -966,11 +1005,12 @@ function renderMatchCard(match) {
           <input type="text" inputmode="numeric" pattern="[0-9]*" value="${pick[1]}" aria-label="Tore ${match.away}" data-match="${match.id}" data-side="1" ${locked ? "disabled" : ""} />
           <button class="score-step" type="button" aria-label="Tipp ${match.away} erhöhen" data-match="${match.id}" data-side="1" data-step="1" ${locked ? "disabled" : ""}>+</button>
         </div>
-        <strong>${points} Pkt.</strong>
+        <strong class="${points === 3 ? `exact-points-badge ${newExactSuccess ? "is-new-exact" : ""}` : ""}">${pointsLabel}</strong>
         <button class="save-pick-button ${isSaved && !hasUnsavedChanges ? "is-saved" : ""}" type="button" data-save-pick="${match.id}" ${locked ? "disabled" : ""}>${saveLabel}</button>
         ${bravo}
       </div>
       ${locked ? `<p class="match-lock-message">Dieses Spiel kann nicht mehr getippt werden.</p>` : ""}
+      ${celebration}
     </article>
   `;
 }
