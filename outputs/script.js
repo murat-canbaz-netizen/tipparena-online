@@ -321,6 +321,7 @@ const remoteState = {
 };
 let liveResultsTimer = null;
 let liveResultsRequestPending = false;
+let lastVisibleResultsRefresh = 0;
 
 const heroJoinForm = document.querySelector("#heroJoinForm");
 const teacherLinkForm = document.querySelector("#teacherLinkForm");
@@ -602,12 +603,17 @@ async function refreshResultsNow() {
 
 window.tipparenaRefreshResults = refreshResultsNow;
 
-document.addEventListener("visibilitychange", () => {
+function refreshVisibleResults() {
   if (document.visibilityState !== "visible") return;
+  if (Date.now() - lastVisibleResultsRefresh < 20_000) return;
+  lastVisibleResultsRefresh = Date.now();
   refreshResultsNow().catch(() => {
     scheduleLiveResultsUpdate(900_000);
   });
-});
+}
+
+document.addEventListener("visibilitychange", refreshVisibleResults);
+setInterval(refreshVisibleResults, 30_000);
 
 async function createRemoteRoom(room) {
   const data = await apiRequest(
@@ -822,6 +828,12 @@ function countdownContent(startTime) {
 }
 
 function countdownMarkup(match) {
+  if (match.status === "done" || (match.result && match.status !== "live")) {
+    return '<div class="match-countdown match-ended"><span>Endstand eingetragen</span></div>';
+  }
+  if (match.status === "live") {
+    return '<div class="match-countdown match-ended"><span>Spiel läuft</span></div>';
+  }
   const startTime = matchStartTime(match);
   return `<div class="match-countdown" data-start="${startTime}">${countdownContent(startTime)}</div>`;
 }
