@@ -2016,14 +2016,17 @@ footer,
 
 .group-card .match-card.points-3::before {
   background:
-    radial-gradient(circle at 12% 18%, rgba(255, 211, 92, 0.64) 0 3px, transparent 4px),
-    radial-gradient(circle at 86% 74%, rgba(71, 190, 125, 0.46) 0 3px, transparent 4px);
-  opacity: 0.52;
+    radial-gradient(circle at 12% 18%, rgba(255, 209, 86, 0.78) 0 4px, transparent 5px),
+    radial-gradient(circle at 87% 22%, rgba(38, 190, 171, 0.58) 0 4px, transparent 5px),
+    radial-gradient(circle at 84% 80%, rgba(68, 194, 124, 0.58) 0 3px, transparent 4px);
+  opacity: 0.68;
 }
 
 .group-card .match-card.points-3::after {
-  border-radius: 8px;
-  box-shadow: inset 0 0 38px rgba(73, 201, 133, 0.1);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 58px rgba(255, 255, 255, 0.72),
+    inset 0 0 0 1px rgba(255, 210, 88, 0.28);
 }
 
 .group-card .match-card.points-0 {
@@ -2048,12 +2051,21 @@ footer,
 }
 
 .group-card .match-card.points-3 {
-  border: 3px solid rgba(66, 190, 124, 0.68);
+  border: 3px solid rgba(54, 188, 133, 0.76);
+  border-radius: 12px;
   background:
-    linear-gradient(135deg, rgba(239, 255, 246, 0.99), rgba(212, 250, 229, 0.96)),
+    radial-gradient(circle at 92% 8%, rgba(255, 219, 116, 0.48), transparent 31%),
+    linear-gradient(135deg, rgba(239, 255, 247, 0.99), rgba(210, 251, 238, 0.97) 54%, rgba(255, 246, 207, 0.94)),
     #effff6;
-  color: #153d2b;
-  box-shadow: 0 16px 38px rgba(40, 174, 104, 0.18), 0 0 0 1px rgba(94, 211, 148, 0.12);
+  color: #123c2a;
+  box-shadow:
+    0 20px 46px rgba(26, 166, 111, 0.24),
+    0 0 24px rgba(255, 201, 77, 0.18),
+    0 0 0 1px rgba(75, 207, 157, 0.16);
+}
+
+.group-card .match-card.points-3.new-exact-success {
+  animation: exactCardGlow 1.45s ease-out both;
 }
 
 .group-card .match-card.points-3 .team strong,
@@ -2065,19 +2077,41 @@ footer,
 }
 
 .group-card .match-card.points-3 .pick-line {
-  border-color: rgba(66, 190, 124, 0.28);
-  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(55, 188, 132, 0.36);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(255, 208, 82, 0.14), 0 12px 30px rgba(30, 159, 102, 0.08);
 }
 
 .group-card .match-card.points-3 .bravo-badge {
-  background: rgba(34, 150, 92, 0.12);
-  color: #157448;
+  left: auto;
+  right: 14px;
+  bottom: 14px;
+  border: 1px solid rgba(221, 165, 43, 0.4);
+  padding: 8px 13px;
+  background: linear-gradient(135deg, rgba(255, 250, 224, 0.98), rgba(255, 223, 129, 0.94));
+  color: #785310;
+  font-size: 0.78rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 20px rgba(184, 127, 21, 0.18);
 }
 
 .exact-points-badge {
-  background: linear-gradient(135deg, #157f4d, #24a866) !important;
+  border: 1px solid rgba(255, 223, 130, 0.72) !important;
+  border-radius: 999px !important;
+  padding: 12px 20px !important;
+  background: linear-gradient(135deg, #117a4a, #24ad79 62%, #c79125) !important;
   color: white !important;
-  box-shadow: 0 8px 22px rgba(30, 159, 94, 0.28) !important;
+  font-size: clamp(1rem, 2.2vw, 1.18rem) !important;
+  letter-spacing: 0.015em;
+  box-shadow: 0 11px 28px rgba(24, 152, 96, 0.3), 0 0 18px rgba(224, 169, 52, 0.2) !important;
+}
+
+.group-card .match-card.points-3 .match-lock-message {
+  border-color: rgba(54, 188, 133, 0.28);
+  background: rgba(255, 255, 255, 0.68);
+  color: #176b48;
+  box-shadow: inset 0 0 0 1px rgba(54, 188, 133, 0.18);
 }
 
 .exact-points-badge.is-new-exact {
@@ -2096,13 +2130,13 @@ footer,
   position: absolute;
   top: 42%;
   left: 50%;
-  width: 7px;
-  height: 11px;
+  width: 8px;
+  height: 13px;
   border-radius: 3px;
   background: hsl(calc(var(--piece) * 47) 72% 58%);
   opacity: 0;
   transform: translate(-50%, -50%) rotate(0);
-  animation: exactConfetti 1.25s cubic-bezier(0.2, 0.75, 0.3, 1) calc(var(--piece) * 28ms) both;
+  animation: exactConfetti 1.48s cubic-bezier(0.2, 0.75, 0.3, 1) calc(var(--piece) * 24ms) both;
 }
 
 @keyframes exactBadgePop {
@@ -2125,9 +2159,22 @@ footer,
   }
 }
 
+@keyframes exactCardGlow {
+  0% {
+    box-shadow: 0 14px 32px rgba(26, 166, 111, 0.16), 0 0 0 rgba(255, 201, 77, 0);
+  }
+  42% {
+    box-shadow: 0 22px 52px rgba(26, 166, 111, 0.34), 0 0 34px rgba(255, 201, 77, 0.32);
+  }
+  100% {
+    box-shadow: 0 20px 46px rgba(26, 166, 111, 0.24), 0 0 24px rgba(255, 201, 77, 0.18);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .exact-points-badge,
-  .exact-confetti i {
+  .exact-confetti i,
+  .group-card .match-card.points-3.new-exact-success {
     animation: none;
   }
 }

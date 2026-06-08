@@ -972,10 +972,13 @@ function renderMatchCard(match) {
   const points = scorePick(savedPick, match.result);
   const locked = isMatchClosed(match);
   const pointClass = match.result ? `points-${points}` : "";
-  const bravo = points === 3 && match.result ? `<span class="bravo-badge">Bravo!</span>` : "";
+  const bravo = points === 3 && match.result ? `<span class="bravo-badge">Volltreffer!</span>` : "";
   const celebration = exactCelebrationMarkup(match, points);
   const newExactSuccess = Boolean(celebration);
-  const pointsLabel = points === 3 ? "3 Pkt. 🎉" : `${points} Pkt.`;
+  const pointsLabel = points === 3 ? "Volltreffer! 3 Pkt. 🎉" : `${points} Pkt.`;
+  const lockMessage = points === 3
+    ? "Endstand erreicht – dein Tipp wurde ausgewertet."
+    : "Dieses Spiel kann nicht mehr getippt werden.";
   const saveLabel = locked
     ? isSaved ? "Gespeichert ✓" : "Nicht getippt"
     : isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : "Tipp speichern";
@@ -1009,7 +1012,7 @@ function renderMatchCard(match) {
         <button class="save-pick-button ${isSaved && !hasUnsavedChanges ? "is-saved" : ""}" type="button" data-save-pick="${match.id}" ${locked ? "disabled" : ""}>${saveLabel}</button>
         ${bravo}
       </div>
-      ${locked ? `<p class="match-lock-message">Dieses Spiel kann nicht mehr getippt werden.</p>` : ""}
+      ${locked ? `<p class="match-lock-message">${lockMessage}</p>` : ""}
       ${celebration}
     </article>
   `;
