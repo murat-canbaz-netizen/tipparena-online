@@ -591,6 +591,20 @@ async function syncResults() {
   }
 }
 
+async function refreshResultsNow() {
+  const response = await fetch(`/api/results?t=${Date.now()}`, { cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Ergebnisse konnten nicht aktualisiert werden.");
+
+  (data.fixtures || []).forEach((fixture) => applyLiveFixture(fixture));
+  renderMatches();
+  renderLeaderboard();
+  scheduleLiveResultsUpdate(data.rateLimited ? 600_000 : data.hasLiveMatches ? 300_000 : 900_000);
+  return data;
+}
+
+window.tipparenaRefreshResults = refreshResultsNow;
+
 async function createRemoteRoom(room) {
   const data = await apiRequest(
     "room",

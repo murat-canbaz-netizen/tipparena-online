@@ -3,7 +3,32 @@ const superAdminForm = document.querySelector("#superAdminForm");
 const superAdminMessage = document.querySelector("#superAdminMessage");
 const superAdminStats = document.querySelector("#superAdminStats");
 const superAdminRooms = document.querySelector("#superAdminRooms");
+const adminSessionKey = "tipparenaAdminCode";
 let superAdminResults = null;
+
+function storedAdminCode() {
+  try {
+    return sessionStorage.getItem(adminSessionKey) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeAdminCode(adminCode) {
+  try {
+    sessionStorage.setItem(adminSessionKey, adminCode);
+  } catch {
+    // The admin flow still works when session storage is unavailable.
+  }
+}
+
+function clearAdminCode() {
+  try {
+    sessionStorage.removeItem(adminSessionKey);
+  } catch {
+    // Nothing else is required when session storage is unavailable.
+  }
+}
 
 function isSuperAdminView() {
   return window.location.hash === "#superadmin";
@@ -112,8 +137,16 @@ async function loadAdminOverview(adminCode) {
   ]);
   const overview = await overviewResponse.json().catch(() => ({}));
   const resultData = await resultsResponse.json().catch(() => ({}));
-  if (!overviewResponse.ok) throw new Error(overview.error || "Adminbereich konnte nicht geladen werden.");
-  if (!resultsResponse.ok) throw new Error(resultData.error || "Manuelle Ergebnisse konnten nicht geladen werden.");
+  if (!overviewResponse.ok) {
+    const error = new Error(overview.error || "Adminbereich konnte nicht geladen werden.");
+    error.status = overviewResponse.status;
+    throw error;
+  }
+  if (!resultsResponse.ok) {
+    const error = new Error(resultData.error || "Manuelle Ergebnisse konnten nicht geladen werden.");
+    error.status = resultsResponse.status;
+    throw error;
+  }
   renderSuperAdmin(overview);
   renderAdminResults(resultData.results);
 }
@@ -178,9 +211,11 @@ superAdminForm?.addEventListener("submit", async (event) => {
   superAdminMessage.textContent = "Übersicht wird geladen...";
   try {
     await loadAdminOverview(adminCode);
+    storeAdminCode(adminCode);
     superAdminMessage.textContent = "Private Übersicht geladen.";
     superAdminForm.reset();
   } catch (error) {
+    if (error.status === 401) clearAdminCode();
     superAdminMessage.textContent = error.message || "Adminbereich ist momentan nicht erreichbar.";
   }
 });
@@ -189,14 +224,19 @@ superAdminSection?.addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-admin-result]");
   if (!form) return;
   event.preventDefault();
-  const adminCode = window.prompt("Admin-Code zum Speichern eingeben:");
-  if (!adminCode) return;
-
   const message = superAdminResults?.querySelector("#superAdminResultsMessage");
+  const adminCode = storedAdminCode();
+  if (!adminCode) {
+    if (message) message.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
+    return;
+  }
+
   const button = form.querySelector("button");
   const values = new FormData(form);
+  const originalLabel = button.textContent;
   button.disabled = true;
-  if (message) message.textContent = "Ergebnis wird gespeichert...";
+  button.textContent = "Speichere...";
+  if (message) message.textContent = "Speichere...";
   try {
     const response = await fetch("/api/admin-results", {
       method: "POST",
@@ -212,24 +252,24 @@ superAdminSection?.addEventListener("submit", async (event) => {
       }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || "Ergebnis konnte nicht gespeichert werden.");
-    const result = data.result;
-    window.dispatchEvent(new CustomEvent("tipparena:manual-result", {
-      detail: {
-        matchId: result.match_id,
-        status: result.status,
-        minute: result.minute,
-        goals: result.status === "open"
-          ? { home: null, away: null }
-          : { home: Number(result.home_score), away: Number(result.away_score) },
-        manual: true,
-      },
-    }));
-    if (message) message.textContent = "Ergebnis gespeichert. Die Rangliste wurde aktualisiert.";
+    if (!response.ok) {
+      if (response.status === 401) clearAdminCode();
+      throw new Error(data.error || "Ergebnis konnte nicht gespeichert werden.");
+    }
+    if (typeof window.tipparenaRefreshResults !== "function") {
+      throw new Error("Ergebnis wurde gespeichert, konnte aber nicht sofort aktualisiert werden.");
+    }
+    await window.tipparenaRefreshResults();
+    button.textContent = "Ergebnis gespeichert ✓";
+    if (message) message.textContent = "Ergebnis gespeichert ✓";
   } catch (error) {
     if (message) message.textContent = error.message || "Ergebnis konnte nicht gespeichert werden.";
+    button.textContent = "Speichern fehlgeschlagen";
   } finally {
     button.disabled = false;
+    setTimeout(() => {
+      button.textContent = originalLabel;
+    }, 1800);
   }
 });
 
@@ -237,3 +277,16 @@ window.addEventListener("hashchange", updateSuperAdminView);
 addDangerZone();
 addResultsSection();
 updateSuperAdminView();
+
+const sessionAdminCode = storedAdminCode();
+if (sessionAdminCode) {
+  superAdminMessage.textContent = "Private Übersicht wird geladen...";
+  loadAdminOverview(sessionAdminCode)
+    .then(() => {
+      superAdminMessage.textContent = "Private Übersicht geladen.";
+    })
+    .catch((error) => {
+      if (error.status === 401) clearAdminCode();
+      superAdminMessage.textContent = error.message || "Adminbereich ist momentan nicht erreichbar.";
+    });
+}
