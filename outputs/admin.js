@@ -3,6 +3,7 @@ const superAdminForm = document.querySelector("#superAdminForm");
 const superAdminMessage = document.querySelector("#superAdminMessage");
 const superAdminStats = document.querySelector("#superAdminStats");
 const superAdminRooms = document.querySelector("#superAdminRooms");
+let superAdminResults = null;
 
 function isSuperAdminView() {
   return window.location.hash === "#superadmin";
@@ -56,15 +57,65 @@ function renderSuperAdmin(data) {
     : '<p class="superadmin-empty">Noch keine Klassenräume vorhanden.</p>';
 }
 
+function addResultsSection() {
+  if (!superAdminSection || superAdminResults) return;
+  superAdminResults = document.createElement("section");
+  superAdminResults.className = "superadmin-results";
+  superAdminResults.innerHTML = `
+    <div class="superadmin-results-heading">
+      <div><span>Notlösung</span><h3>Spielergebnisse manuell eintragen</h3></div>
+      <p>Manuelle Ergebnisse haben Vorrang vor API-Football.</p>
+    </div>
+    <div id="superAdminResultsList"></div>
+    <p id="superAdminResultsMessage" role="status"></p>
+  `;
+  superAdminRooms?.after(superAdminResults);
+}
+
+function renderAdminResults(results) {
+  addResultsSection();
+  const list = superAdminResults?.querySelector("#superAdminResultsList");
+  if (!list) return;
+  const savedByMatch = new Map((results || []).map((result) => [result.match_id, result]));
+  const matches = window.tipparenaMatchCatalog || [];
+  list.innerHTML = matches.map((match) => {
+    const saved = savedByMatch.get(match.id) || {};
+    const status = saved.status || "open";
+    return `
+      <form class="superadmin-result-row" data-admin-result="${escapeAdminText(match.id)}">
+        <div class="superadmin-result-match">
+          <span>Gruppe ${escapeAdminText(match.group)} · ${escapeAdminText(match.date)} · ${escapeAdminText(match.time)}</span>
+          <strong>${escapeAdminText(match.home)} – ${escapeAdminText(match.away)}</strong>
+        </div>
+        <label>Heim<input name="homeScore" type="number" min="0" max="20" value="${Number(saved.home_score ?? 0)}" required /></label>
+        <label>Gast<input name="awayScore" type="number" min="0" max="20" value="${Number(saved.away_score ?? 0)}" required /></label>
+        <label>Status<select name="status">
+          <option value="open"${status === "open" ? " selected" : ""}>Offen</option>
+          <option value="live"${status === "live" ? " selected" : ""}>Live</option>
+          <option value="finished"${status === "finished" ? " selected" : ""}>Beendet</option>
+        </select></label>
+        <label>Minute<input name="minute" type="number" min="0" max="150" value="${saved.minute ?? ""}" /></label>
+        <button type="submit">Ergebnis speichern</button>
+      </form>`;
+  }).join("");
+}
+
 async function loadAdminOverview(adminCode) {
-  const response = await fetch("/api/admin", {
+  const options = (body) => ({
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ adminCode }),
+    body: JSON.stringify(body),
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Adminbereich konnte nicht geladen werden.");
-  renderSuperAdmin(data);
+  const [overviewResponse, resultsResponse] = await Promise.all([
+    fetch("/api/admin", options({ adminCode })),
+    fetch("/api/admin-results", options({ adminCode, action: "list" })),
+  ]);
+  const overview = await overviewResponse.json().catch(() => ({}));
+  const resultData = await resultsResponse.json().catch(() => ({}));
+  if (!overviewResponse.ok) throw new Error(overview.error || "Adminbereich konnte nicht geladen werden.");
+  if (!resultsResponse.ok) throw new Error(resultData.error || "Manuelle Ergebnisse konnten nicht geladen werden.");
+  renderSuperAdmin(overview);
+  renderAdminResults(resultData.results);
 }
 
 function addDangerZone() {
@@ -134,6 +185,55 @@ superAdminForm?.addEventListener("submit", async (event) => {
   }
 });
 
+superAdminSection?.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-admin-result]");
+  if (!form) return;
+  event.preventDefault();
+  const adminCode = window.prompt("Admin-Code zum Speichern eingeben:");
+  if (!adminCode) return;
+
+  const message = superAdminResults?.querySelector("#superAdminResultsMessage");
+  const button = form.querySelector("button");
+  const values = new FormData(form);
+  button.disabled = true;
+  if (message) message.textContent = "Ergebnis wird gespeichert...";
+  try {
+    const response = await fetch("/api/admin-results", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        adminCode,
+        action: "save",
+        matchId: form.dataset.adminResult,
+        homeScore: values.get("homeScore"),
+        awayScore: values.get("awayScore"),
+        status: values.get("status"),
+        minute: values.get("minute"),
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Ergebnis konnte nicht gespeichert werden.");
+    const result = data.result;
+    window.dispatchEvent(new CustomEvent("tipparena:manual-result", {
+      detail: {
+        matchId: result.match_id,
+        status: result.status,
+        minute: result.minute,
+        goals: result.status === "open"
+          ? { home: null, away: null }
+          : { home: Number(result.home_score), away: Number(result.away_score) },
+        manual: true,
+      },
+    }));
+    if (message) message.textContent = "Ergebnis gespeichert. Die Rangliste wurde aktualisiert.";
+  } catch (error) {
+    if (message) message.textContent = error.message || "Ergebnis konnte nicht gespeichert werden.";
+  } finally {
+    button.disabled = false;
+  }
+});
+
 window.addEventListener("hashchange", updateSuperAdminView);
 addDangerZone();
+addResultsSection();
 updateSuperAdminView();

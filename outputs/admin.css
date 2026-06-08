@@ -172,10 +172,112 @@ body.is-superadmin .superadmin-section {
   font-weight: 850;
 }
 
+.superadmin-results {
+  margin-top: 36px;
+}
+
+.superadmin-results-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.superadmin-results-heading span {
+  color: #2f7bd7;
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.superadmin-results-heading h3,
+.superadmin-results-heading p {
+  margin: 6px 0 0;
+}
+
+.superadmin-results-heading p,
+#superAdminResultsMessage {
+  color: #657184;
+  font-weight: 800;
+}
+
+#superAdminResultsList {
+  display: grid;
+  gap: 10px;
+}
+
+.superadmin-result-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) repeat(2, 74px) 120px 86px auto;
+  gap: 10px;
+  align-items: end;
+  border: 1px solid #dce3ec;
+  border-radius: 12px;
+  padding: 14px;
+  background: white;
+}
+
+.superadmin-result-match {
+  display: grid;
+  gap: 4px;
+}
+
+.superadmin-result-match span {
+  color: #657184;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.superadmin-result-match strong {
+  color: #111827;
+}
+
+.superadmin-result-row label {
+  display: grid;
+  gap: 5px;
+  color: #657184;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.superadmin-result-row input,
+.superadmin-result-row select,
+.superadmin-result-row button {
+  min-height: 42px;
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.superadmin-result-row button {
+  border-color: #111827;
+  background: #111827;
+  color: white;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+#superAdminResultsMessage {
+  min-height: 24px;
+}
+
 @media (max-width: 760px) {
   .superadmin-access,
   .superadmin-stats,
   .superadmin-danger-zone {
     grid-template-columns: 1fr;
+  }
+
+  .superadmin-results-heading,
+  .superadmin-result-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .superadmin-result-match,
+  .superadmin-result-row button {
+    grid-column: 1 / -1;
   }
 }

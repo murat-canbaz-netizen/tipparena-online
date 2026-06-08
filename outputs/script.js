@@ -258,6 +258,8 @@ const matches = rawMatches.map(([group, date, time, home, away]) => {
   };
 });
 
+window.tipparenaMatchCatalog = matches.map(({ id, group, date, time, home, away }) => ({ id, group, date, time, home, away }));
+
 function buildPicks(seed) {
   return Object.fromEntries(
     matches.map((match) => [
@@ -525,16 +527,17 @@ function normalizedResultTeam(name) {
 }
 
 function applyLiveFixture(fixture) {
-  const match = matches.find(
+  const match = matches.find((entry) => entry.id === fixture.matchId) || matches.find(
     (entry) =>
       normalizedResultTeam(entry.home) === normalizedResultTeam(fixture.home?.name) &&
       normalizedResultTeam(entry.away) === normalizedResultTeam(fixture.away?.name),
   );
   if (!match) return false;
 
-  const finishedStatuses = new Set(["FT", "AET", "PEN"]);
+  const finishedStatuses = new Set(["FT", "AET", "PEN", "finished"]);
   const liveStatuses = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
-  const hasScore = Number.isFinite(fixture.goals?.home) && Number.isFinite(fixture.goals?.away);
+  liveStatuses.add("live");
+  const hasScore = fixture.status !== "open" && Number.isFinite(fixture.goals?.home) && Number.isFinite(fixture.goals?.away);
   match.result = hasScore ? [fixture.goals.home, fixture.goals.away] : null;
   match.status = finishedStatuses.has(fixture.status) ? "done" : liveStatuses.has(fixture.status) ? "live" : "open";
   match.minute = fixture.minute ?? "";
@@ -580,7 +583,7 @@ async function syncResults() {
       renderMatches();
       renderLeaderboard();
     }
-    scheduleLiveResultsUpdate(data.hasLiveMatches ? 300_000 : 900_000);
+    scheduleLiveResultsUpdate(data.rateLimited ? 600_000 : data.hasLiveMatches ? 300_000 : 900_000);
   } catch {
     scheduleLiveResultsUpdate(900_000);
   } finally {
@@ -1451,5 +1454,11 @@ updateAvatarPreview();
 renderAll();
 syncRoom().then(syncPicks);
 syncResults();
+
+window.addEventListener("tipparena:manual-result", (event) => {
+  if (!applyLiveFixture(event.detail || {})) return;
+  renderMatches();
+  renderLeaderboard();
+});
 
 setInterval(updateCountdowns, 1000);
