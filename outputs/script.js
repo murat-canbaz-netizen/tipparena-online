@@ -629,9 +629,13 @@ async function createRemotePlayer(nickname, avatar) {
 }
 
 async function saveRemotePick(matchId, pick) {
-  if (!classState.code || !classState.playerId || !remoteState.online) return false;
+  if (!classState.code || !classState.playerId || !remoteState.online) {
+    return { saved: false, error: "Online-Speicherung nicht erreichbar." };
+  }
   const match = matches.find((entry) => entry.id === matchId);
-  if (!match || isMatchClosed(match) || !pick) return false;
+  if (!match || isMatchClosed(match) || !pick) {
+    return { saved: false, status: 409, error: "Dieses Spiel hat bereits begonnen. Dein Tipp wurde nicht gespeichert." };
+  }
   const data = await apiRequest(
     "picks",
     {
@@ -646,9 +650,9 @@ async function saveRemotePick(matchId, pick) {
     },
     "/api/picks",
   );
-  if (!data?.picks) return false;
+  if (!data?.picks) return { saved: false, status: data?.status, error: data?.error || "Speichern fehlgeschlagen." };
   await syncPicks();
-  return true;
+  return { saved: true };
 }
 
 function showLockedMatchMessage(matchId) {
@@ -1406,10 +1410,10 @@ matchList.addEventListener("click", (event) => {
     const pickToSave = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
     saveButton.disabled = true;
     saveButton.textContent = "Wird gespeichert...";
-    saveRemotePick(matchId, pickToSave).then((saved) => {
-      if (!saved) {
-        saveButton.disabled = false;
-        saveButton.textContent = "Speichern fehlgeschlagen";
+    saveRemotePick(matchId, pickToSave).then((result) => {
+      if (!result.saved) {
+        saveButton.disabled = result.status === 409;
+        saveButton.textContent = result.error || "Speichern fehlgeschlagen";
         return;
       }
       userPicks[matchId] = pickToSave;

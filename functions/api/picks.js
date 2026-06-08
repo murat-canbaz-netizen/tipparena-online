@@ -1,4 +1,5 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
+import { matchKickoff } from "../lib/matches.js";
 
 function cleanScore(value) {
   return Math.max(0, Math.min(20, Number(value || 0)));
@@ -32,6 +33,16 @@ export async function onRequest(context) {
       const rows = Array.isArray(body.picks) ? body.picks : [body];
 
       if (!roomCode || !playerId) return jsonResponse(400, { error: "Raum oder Spieler fehlt." });
+      const matchIds = rows.map((pick) => String(pick.matchId || "").trim().toLowerCase());
+      const unknownMatchId = matchIds.find((matchId) => matchKickoff(matchId) === null);
+      if (unknownMatchId !== undefined) {
+        return jsonResponse(400, { error: "Unbekannte Spiel-ID. Der Tipp wurde nicht gespeichert." });
+      }
+      const now = Date.now();
+      if (matchIds.some((matchId) => now >= matchKickoff(matchId))) {
+        return jsonResponse(409, { error: "Dieses Spiel hat bereits begonnen. Dein Tipp wurde nicht gespeichert." });
+      }
+
       const player = await supabase(
         env,
         `players?id=eq.${encodeURIComponent(playerId)}&room_code=eq.${encodeURIComponent(roomCode)}&select=id&limit=1`,
@@ -39,11 +50,10 @@ export async function onRequest(context) {
       if (!player.length) return jsonResponse(403, { error: "Dieser Spieler gehört nicht zu diesem Klassenraum." });
 
       const payload = rows
-        .filter((pick) => pick.matchId)
         .map((pick) => ({
           room_code: roomCode,
           player_id: playerId,
-          match_id: String(pick.matchId),
+          match_id: String(pick.matchId).trim().toLowerCase(),
           home_score: cleanScore(pick.homeScore),
           away_score: cleanScore(pick.awayScore),
           updated_at: new Date().toISOString(),
