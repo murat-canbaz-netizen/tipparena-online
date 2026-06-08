@@ -106,6 +106,80 @@ body.is-superadmin .superadmin-section {
   font-weight: 800;
 }
 
+.superadmin-player-toggle {
+  min-height: 36px;
+  border: 1px solid #cfd8e5;
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: #f4f7fb;
+  color: #2f5f9d;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.superadmin-player-toggle:hover,
+.superadmin-player-toggle[aria-expanded="true"] {
+  border-color: #8fb4df;
+  background: #eaf3ff;
+}
+
+.superadmin-player-detail td {
+  padding: 18px;
+  background: #f4f7fb;
+  white-space: normal;
+}
+
+.superadmin-player-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.superadmin-player {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 3px 12px;
+  align-items: center;
+  border: 1px solid #dce3ec;
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+}
+
+.superadmin-player img {
+  grid-row: 1 / 4;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #edf3f8;
+}
+
+.superadmin-player strong {
+  overflow: hidden;
+  color: #111827;
+  text-overflow: ellipsis;
+}
+
+.superadmin-player span {
+  color: #657184;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.superadmin-player span b {
+  color: #2f5f9d;
+}
+
+.superadmin-player-empty {
+  margin: 0;
+  color: #657184;
+  font-weight: 800;
+}
+
 .superadmin-room-delete {
   min-height: 36px;
   border: 1px solid rgba(183, 66, 55, 0.32);

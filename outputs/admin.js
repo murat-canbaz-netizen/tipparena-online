@@ -5,6 +5,8 @@ const superAdminStats = document.querySelector("#superAdminStats");
 const superAdminRooms = document.querySelector("#superAdminRooms");
 const adminSessionKey = "tipparenaAdminCode";
 let superAdminResults = null;
+const expandedAdminRooms = new Set();
+const allowedAdminAvatars = new Set(["panda", "koala", "shark", "lion", "croc", "giraffe", "rhino", "axolotl"]);
 
 function storedAdminCode() {
   try {
@@ -53,6 +55,26 @@ function formatAdminDate(value) {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function adminAvatarPath(avatar) {
+  const safeAvatar = allowedAdminAvatars.has(String(avatar)) ? String(avatar) : "panda";
+  return `/avatars/${safeAvatar}.png`;
+}
+
+function renderAdminPlayers(room) {
+  const players = Array.isArray(room.players) ? room.players : [];
+  if (!players.length) return '<p class="superadmin-player-empty">Noch keine Spieler in diesem Raum.</p>';
+  return `
+    <div class="superadmin-player-list">
+      ${players.map((player) => `
+        <article class="superadmin-player">
+          <img src="${adminAvatarPath(player.avatar)}" alt="" />
+          <strong>${escapeAdminText(player.nickname)}</strong>
+          <span><b>${Number(player.pickCount || 0)}</b> gespeicherte Tipps</span>
+          <span><b>${Number(player.points || 0)}</b> Punkte</span>
+        </article>`).join("")}
+    </div>`;
+}
+
 function renderSuperAdmin(data) {
   superAdminStats.innerHTML = `
     <article><span>Klassenräume gesamt</span><strong>${Number(data.totalRooms || 0)}</strong></article>
@@ -66,18 +88,24 @@ function renderSuperAdmin(data) {
       <div class="superadmin-table-wrap">
         <table class="superadmin-table">
           <thead><tr><th>Schule</th><th>Klasse</th><th>Raum-Code</th><th>Lehrer-Code</th><th>Spieler</th><th>Tipps</th><th>Erstellt am</th><th>Letzte Aktivität</th><th>Aktion</th></tr></thead>
-          <tbody>${rooms.map((room) => `
-            <tr>
+          <tbody>${rooms.map((room) => {
+            const expanded = expandedAdminRooms.has(room.roomCode);
+            return `
+            <tr class="superadmin-room-row">
               <td>${escapeAdminText(room.schoolName)}</td>
               <td>${escapeAdminText(room.className)}</td>
               <td><code>${escapeAdminText(room.roomCode)}</code></td>
               <td><code>${escapeAdminText(room.teacherCode || "-")}</code></td>
-              <td>${Number(room.playerCount || 0)}</td>
+              <td><button class="superadmin-player-toggle" type="button" data-toggle-players="${escapeAdminText(room.roomCode)}" aria-expanded="${expanded}">${expanded ? "Spieler ausblenden" : `${Number(room.playerCount || 0)} Spieler anzeigen`}</button></td>
               <td>${Number(room.pickCount || 0)}</td>
               <td>${escapeAdminText(formatAdminDate(room.createdAt))}</td>
               <td>${escapeAdminText(formatAdminDate(room.lastActivity))}</td>
               <td><button class="superadmin-room-delete" type="button" data-delete-room="${escapeAdminText(room.roomCode)}" data-room-school="${escapeAdminText(room.schoolName)}" data-room-class="${escapeAdminText(room.className)}">Raum löschen</button></td>
-            </tr>`).join("")}</tbody>
+            </tr>
+            <tr class="superadmin-player-detail"${expanded ? "" : " hidden"} data-player-detail="${escapeAdminText(room.roomCode)}">
+              <td colspan="9">${renderAdminPlayers(room)}</td>
+            </tr>`;
+          }).join("")}</tbody>
         </table>
       </div>`
     : '<p class="superadmin-empty">Noch keine Klassenräume vorhanden.</p>';
@@ -275,6 +303,19 @@ superAdminSection?.addEventListener("submit", async (event) => {
 });
 
 superAdminRooms?.addEventListener("click", async (event) => {
+  const toggle = event.target.closest("[data-toggle-players]");
+  if (toggle) {
+    const roomCode = toggle.dataset.togglePlayers;
+    const detail = superAdminRooms.querySelector(`[data-player-detail="${CSS.escape(roomCode)}"]`);
+    const willExpand = detail?.hidden ?? false;
+    if (willExpand) expandedAdminRooms.add(roomCode);
+    else expandedAdminRooms.delete(roomCode);
+    if (detail) detail.hidden = !willExpand;
+    toggle.setAttribute("aria-expanded", String(willExpand));
+    toggle.textContent = willExpand ? "Spieler ausblenden" : `${detail?.querySelectorAll(".superadmin-player").length || 0} Spieler anzeigen`;
+    return;
+  }
+
   const button = event.target.closest("[data-delete-room]");
   if (!button) return;
 

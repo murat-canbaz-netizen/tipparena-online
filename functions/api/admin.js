@@ -6,6 +6,19 @@ function latestDate(...values) {
     .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null;
 }
 
+function scorePick(pick, result) {
+  if (!pick || !result) return 0;
+  const [homePick, awayPick] = pick;
+  const [homeResult, awayResult] = result;
+  const pickDiff = homePick - awayPick;
+  const resultDiff = homeResult - awayResult;
+  if (homePick === homeResult && awayPick === awayResult) return 3;
+  if (resultDiff === 0) return pickDiff === 0 ? 1 : 0;
+  if (pickDiff === resultDiff) return 2;
+  if (Math.sign(pickDiff) === Math.sign(resultDiff)) return 1;
+  return 0;
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
@@ -23,11 +36,17 @@ export async function onRequest(context) {
   }
 
   try {
-    const [roomRows, players, picks] = await Promise.all([
+    const [roomRows, players, picks, manualResults] = await Promise.all([
       supabase(env, "rooms?select=code,school,class_name,created_at&order=created_at.desc"),
-      supabase(env, "players?select=room_code,created_at"),
-      supabase(env, "picks?select=room_code,updated_at"),
+      supabase(env, "players?select=id,room_code,nickname,avatar,created_at"),
+      supabase(env, "picks?select=room_code,player_id,match_id,home_score,away_score,updated_at"),
+      supabase(env, "manual_results?select=match_id,home_score,away_score,status"),
     ]);
+    const resultsByMatch = new Map(
+      manualResults
+        .filter((result) => result.status !== "open")
+        .map((result) => [result.match_id, [Number(result.home_score), Number(result.away_score)]]),
+    );
 
     const teacherCodes = new Map(
       roomRows
@@ -47,6 +66,23 @@ export async function onRequest(context) {
           createdAt: room.created_at || null,
           playerCount: roomPlayers.length,
           pickCount: roomPicks.length,
+          players: roomPlayers
+            .map((player) => {
+              const playerPicks = roomPicks.filter((pick) => pick.player_id === player.id);
+              return {
+                nickname: player.nickname,
+                avatar: player.avatar,
+                pickCount: playerPicks.length,
+                points: playerPicks.reduce(
+                  (sum, pick) => sum + scorePick(
+                    [Number(pick.home_score), Number(pick.away_score)],
+                    resultsByMatch.get(pick.match_id),
+                  ),
+                  0,
+                ),
+              };
+            })
+            .sort((left, right) => left.nickname.localeCompare(right.nickname, "de")),
           lastActivity: latestDate(
             room.created_at,
             ...roomPlayers.map((player) => player.created_at),
