@@ -54,12 +54,63 @@ function mergedResponse(apiData, manualFixtures) {
   return response;
 }
 
+function sanitizeDiagnostic(value, apiKey) {
+  if (Array.isArray(value)) return value.map((entry) => sanitizeDiagnostic(entry, apiKey));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, sanitizeDiagnostic(entry, apiKey)]));
+  }
+  if (typeof value === "string" && apiKey) return value.replaceAll(apiKey, "[REDACTED]");
+  return value;
+}
+
+function apiErrorDetails(apiResponse, data, query, apiKey) {
+  const rawErrors = data.errors || data.message || null;
+  const errorText = JSON.stringify(rawErrors || "").toLowerCase();
+  let category = "api_error";
+  let message = "API-Football hat einen unbekannten Fehler gemeldet.";
+
+  if (apiResponse.status === 429 || errorText.includes("too many requests") || errorText.includes("rate limit")) {
+    category = "rate_limit";
+    message = "Das API-Football-Anfragelimit wurde erreicht.";
+  } else if (apiResponse.status === 401 || errorText.includes("invalid key") || errorText.includes("application key") || errorText.includes("unauthorized")) {
+    category = "invalid_key";
+    message = "Der API-Football-Key fehlt oder ist ungültig.";
+  } else if (apiResponse.status === 403 || errorText.includes("plan") || errorText.includes("subscription") || errorText.includes("access")) {
+    category = "plan_restriction";
+    message = "Der API-Football-Tarif erlaubt diese Anfrage wahrscheinlich nicht.";
+  } else if (errorText.includes("league") || errorText.includes("season")) {
+    category = "invalid_competition";
+    message = "League oder Season wird von API-Football nicht akzeptiert.";
+  }
+
+  return sanitizeDiagnostic({
+    category,
+    message,
+    httpStatus: apiResponse.status,
+    query: Object.fromEntries(query),
+    apiErrors: rawErrors,
+  }, apiKey);
+}
+
+function adminTestMode(request, env) {
+  const enabled = new URL(request.url).searchParams.get("adminTest") === "1";
+  if (!enabled) return { enabled: false, authorized: false };
+  const adminKey = String(env.ADMIN_DASHBOARD_KEY || "");
+  const submittedKey = String(request.headers.get("X-Admin-Code") || "");
+  return { enabled: true, authorized: Boolean(adminKey) && submittedKey === adminKey };
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
   if (request.method !== "GET") return jsonResponse(405, { error: "Methode nicht erlaubt." });
 
   const sourceParams = new URL(request.url).searchParams;
+  const adminTest = adminTestMode(request, env);
+  if (adminTest.enabled && !adminTest.authorized) {
+    return jsonResponse(401, { error: "Admin-Testmodus ist nicht autorisiert." });
+  }
+
   const query = new URLSearchParams();
   allowedParameters.forEach((name) => {
     const value = sourceParams.get(name);
@@ -84,16 +135,23 @@ export async function onRequest(context) {
     const manualFixtures = manualRows.map(normalizeManualResult);
     const apiKey = env.API_FOOTBALL_KEY;
     if (!apiKey) {
+      const diagnostic = {
+        category: "missing_key",
+        message: "API_FOOTBALL_KEY ist in der Cloudflare-Umgebung nicht gesetzt.",
+        query: Object.fromEntries(query),
+      };
+      console.error("API-Football Diagnose", diagnostic);
       return mergedResponse({
         results: 0,
         warning: "Live-Ergebnisse sind noch nicht konfiguriert. Manuelle Ergebnisse werden verwendet.",
+        ...(adminTest.authorized ? { diagnostic } : {}),
         nextUpdateSeconds: idleCacheSeconds,
       }, manualFixtures);
     }
 
     const cache = caches.default;
     const cacheKey = new Request(`${new URL(request.url).origin}/api/results?${query}`);
-    const cachedResponse = await cache.match(cacheKey);
+    const cachedResponse = adminTest.authorized ? null : await cache.match(cacheKey);
     if (cachedResponse) return mergedResponse(await cachedResponse.json(), manualFixtures);
 
     const apiResponse = await fetch(`${apiUrl}?${query}`, {
@@ -104,28 +162,44 @@ export async function onRequest(context) {
     const rateLimited = apiResponse.status === 429 || errorText.includes("too many requests") || errorText.includes("rate limit");
 
     if (rateLimited) {
+      const diagnostic = apiErrorDetails(apiResponse, data, query, apiKey);
+      console.error("API-Football Diagnose", diagnostic);
       const apiData = {
         fixtures: [],
         warning: "Live-Ergebnisse werden später aktualisiert. Manuelle Ergebnisse werden verwendet.",
         rateLimited: true,
         retryAfterSeconds: rateLimitCacheSeconds,
         nextUpdateSeconds: rateLimitCacheSeconds,
+        ...(adminTest.authorized ? { diagnostic } : {}),
       };
       const cachedRateLimit = jsonResponse(200, apiData);
       cachedRateLimit.headers.set("Cache-Control", `public, max-age=${rateLimitCacheSeconds}`);
-      context.waitUntil(cache.put(cacheKey, cachedRateLimit));
+      if (!adminTest.authorized) context.waitUntil(cache.put(cacheKey, cachedRateLimit));
       return mergedResponse(apiData, manualFixtures);
     }
 
     if (!apiResponse.ok || data.errors?.length || Object.keys(data.errors || {}).length) {
+      const diagnostic = apiErrorDetails(apiResponse, data, query, apiKey);
+      console.error("API-Football Diagnose", diagnostic);
       return mergedResponse({
         fixtures: [],
         warning: "API-Football konnte keine Live-Ergebnisse liefern. Manuelle Ergebnisse werden verwendet.",
+        ...(adminTest.authorized ? { diagnostic } : {}),
         nextUpdateSeconds: idleCacheSeconds,
       }, manualFixtures);
     }
 
     const fixtures = Array.isArray(data.response) ? data.response.map(normalizeFixture) : [];
+    const diagnostic = fixtures.length
+      ? null
+      : {
+          category: "no_data",
+          message: "API-Football hat die Anfrage akzeptiert, aber keine Fixtures gefunden.",
+          httpStatus: apiResponse.status,
+          query: Object.fromEntries(query),
+          apiResults: Number(data.results || 0),
+        };
+    if (diagnostic) console.warn("API-Football Diagnose", diagnostic);
     const hasLiveMatches = fixtures.some((fixture) => liveStatuses.has(fixture.status));
     const cacheSeconds = hasLiveMatches ? liveCacheSeconds : idleCacheSeconds;
     const apiData = {
@@ -133,15 +207,22 @@ export async function onRequest(context) {
       fixtures,
       hasLiveMatches,
       nextUpdateSeconds: cacheSeconds,
+      ...(adminTest.authorized && diagnostic ? { diagnostic } : {}),
     };
     const cachedApiResponse = jsonResponse(200, apiData);
     cachedApiResponse.headers.set("Cache-Control", `public, max-age=${cacheSeconds}`);
-    context.waitUntil(cache.put(cacheKey, cachedApiResponse));
+    if (!adminTest.authorized) context.waitUntil(cache.put(cacheKey, cachedApiResponse));
     return mergedResponse(apiData, manualFixtures);
   } catch (error) {
+    const diagnostic = {
+      category: "network_or_server_error",
+      message: "Die Verbindung zu API-Football oder die Ergebnisverarbeitung ist fehlgeschlagen.",
+      details: error.message,
+    };
+    console.error("API-Football Diagnose", diagnostic);
     return jsonResponse(502, {
       error: "Ergebnisse sind momentan nicht erreichbar.",
-      details: error.message,
+      ...(adminTest.authorized ? { diagnostic } : {}),
     });
   }
 }
