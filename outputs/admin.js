@@ -65,7 +65,7 @@ function renderSuperAdmin(data) {
     ? `
       <div class="superadmin-table-wrap">
         <table class="superadmin-table">
-          <thead><tr><th>Schule</th><th>Klasse</th><th>Raum-Code</th><th>Lehrer-Code</th><th>Spieler</th><th>Tipps</th><th>Erstellt am</th><th>Letzte Aktivität</th></tr></thead>
+          <thead><tr><th>Schule</th><th>Klasse</th><th>Raum-Code</th><th>Lehrer-Code</th><th>Spieler</th><th>Tipps</th><th>Erstellt am</th><th>Letzte Aktivität</th><th>Aktion</th></tr></thead>
           <tbody>${rooms.map((room) => `
             <tr>
               <td>${escapeAdminText(room.schoolName)}</td>
@@ -76,6 +76,7 @@ function renderSuperAdmin(data) {
               <td>${Number(room.pickCount || 0)}</td>
               <td>${escapeAdminText(formatAdminDate(room.createdAt))}</td>
               <td>${escapeAdminText(formatAdminDate(room.lastActivity))}</td>
+              <td><button class="superadmin-room-delete" type="button" data-delete-room="${escapeAdminText(room.roomCode)}" data-room-school="${escapeAdminText(room.schoolName)}" data-room-class="${escapeAdminText(room.className)}">Raum löschen</button></td>
             </tr>`).join("")}</tbody>
         </table>
       </div>`
@@ -270,6 +271,52 @@ superAdminSection?.addEventListener("submit", async (event) => {
     setTimeout(() => {
       button.textContent = originalLabel;
     }, 1800);
+  }
+});
+
+superAdminRooms?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-delete-room]");
+  if (!button) return;
+
+  const adminCode = storedAdminCode();
+  if (!adminCode) {
+    superAdminMessage.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
+    return;
+  }
+
+  const roomCode = button.dataset.deleteRoom;
+  const school = button.dataset.roomSchool;
+  const className = button.dataset.roomClass;
+  const confirmation = [
+    "Möchtest du diesen Raum wirklich löschen?",
+    `Schule: ${school}`,
+    `Klasse: ${className}`,
+    `Raum-Code: ${roomCode}`,
+    "Dabei werden alle Spieler und Tipps dieses Raums gelöscht.",
+  ].join("\n");
+  if (!window.confirm(confirmation)) return;
+
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Lösche...";
+  superAdminMessage.textContent = "Raum wird gelöscht...";
+  try {
+    const response = await fetch("/api/admin-room-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adminCode, roomCode }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 401) clearAdminCode();
+      throw new Error(data.error || "Raum konnte nicht gelöscht werden.");
+    }
+    await loadAdminOverview(adminCode);
+    superAdminMessage.textContent = "Raum gelöscht ✓";
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = originalLabel;
+    superAdminMessage.textContent = error.message || "Raum konnte nicht gelöscht werden.";
   }
 });
 
