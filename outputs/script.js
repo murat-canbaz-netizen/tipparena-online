@@ -1047,23 +1047,72 @@ function winnerHits(picks) {
   return matches.filter((match) => match.result && scorePick(picks[match.id], match.result) > 0).length;
 }
 
-function playerStory(player, rank, ranked) {
-  const streak = exactStreak(player.picks);
-  const hits = winnerHits(player.picks);
-  const podiumGap = Math.max(0, (ranked[2]?.points || 0) - player.points + 1);
-  if (rank === 1) return "Tabellenboss: Alle jagen diesen Platz.";
-  if (streak >= 3) return `${streak} perfekte Tipps hintereinander.`;
-  if (streak === 2) return "Doppel-Treffer: zweimal exakt richtig.";
-  if (player.movement > 0) return "Aufholjagd läuft: heute nach oben geklettert.";
-  if (hits >= 3) return `${hits} Spiele richtig gelesen.`;
-  if (podiumGap > 0) return `Noch ${podiumGap} Punkte bis zum Podium.`;
-  return "Ein perfekter Tipp kann alles drehen.";
+const placementMessages = {
+  1: [
+    "Tabellenboss: Alle jagen diesen Platz.",
+    "Goldmodus aktiviert – heute bist du ganz oben.",
+    "Hier thront der Tippkönig des Tages.",
+    "Spitze! Heute führt kein Weg an dir vorbei.",
+    "Ganz oben gelandet – stark getippt!",
+  ],
+  2: [
+    "Ganz nah dran – der Spitzenplatz wackelt schon.",
+    "Silber-Blitz: Ein kleiner Sprung fehlt noch nach ganz oben.",
+    "Direkt hinter dem Thron – du bist auf Verfolgungsjagd.",
+    "Stark unterwegs – Platz 1 ist in Sichtweite.",
+  ],
+  3: [
+    "Treppchen erreicht – stark gemacht!",
+    "Bronze-Power: Du spielst ganz vorne mit.",
+    "Oben dabei – das Siegerpodest gehört dir.",
+    "Top 3! Jetzt geht’s vielleicht noch höher hinaus.",
+  ],
+  4: [
+    "Knapp am Treppchen vorbei – aber voll im Rennen.",
+    "Fast auf dem Podium – ein guter Tipp bringt dich hoch.",
+    "Nur ein kleiner Sprung bis zu den Top 3.",
+  ],
+  5: [
+    "Starkes Mittelfeld? Nein – du greifst schon oben an!",
+    "Top 5 – da geht noch was!",
+    "Du bist auf Tuchfühlung mit den Besten.",
+  ],
+  middle: [
+    "Mitten im Rennen – der nächste Volltreffer wartet schon.",
+    "Noch ist alles drin – ein paar starke Tipps und du kletterst hoch.",
+    "Angriff läuft – die oberen Plätze kommen näher.",
+    "Solide unterwegs – jetzt kommt die Aufholjagd.",
+  ],
+  chase: [
+    "Nicht aufgeben – Tabellenklettern beginnt genau hier.",
+    "Von hier aus startet oft die spannendste Aufholjagd.",
+    "Noch ist alles offen – ein guter Spieltag kann alles ändern.",
+    "Du sammelst Anlauf – der nächste Sprung kommt bestimmt.",
+  ],
+  last: [
+    "Hinten heißt nicht verloren – jetzt beginnt die Aufholshow.",
+    "Mut nicht verlieren – große Comebacks starten oft von hinten.",
+    "Jeder Volltreffer zählt – dein Aufstieg kann sofort starten.",
+    "Die Tabelle schläft nie – dein Sprung nach oben kann gleich beginnen.",
+  ],
+};
+
+function stableMessageIndex(value, length) {
+  const hash = [...String(value)].reduce((sum, character) => ((sum * 31) + character.charCodeAt(0)) >>> 0, 0);
+  return hash % length;
+}
+
+function playerStory(player, rank) {
+  const messages = placementMessages[rank]
+    || (rank <= 8 ? placementMessages.middle : rank <= 12 ? placementMessages.chase : placementMessages.last);
+  return messages[stableMessageIndex(`${player.id || player.name}-${rank}`, messages.length)];
 }
 
 function renderLeaderboard() {
   const hasCurrentPlayer = Boolean(classState.joinedName);
   const hasClassRoom = Boolean(classState.code);
   const remoteRows = remoteState.players.map((player) => ({
+    id: player.id,
     name: player.nickname,
     avatar: player.avatar,
     picks: player.id === classState.playerId || player.nickname === classState.joinedName ? userPicks : remotePicksForPlayer(player.id),
@@ -1144,7 +1193,7 @@ function renderLeaderboard() {
               <span class="podium-rank">${index === 0 ? "Champion" : `Platz ${index + 1}`}</span>
               <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
               <b>${player.points} Punkte</b>
-              <small>${playerStory(player, index + 1, ranked)}</small>
+              <small class="placement-message">${playerStory(player, index + 1)}</small>
             </article>
           `,
         )
@@ -1158,7 +1207,7 @@ function renderLeaderboard() {
           <span class="rank">Platz ${index + 1}</span>
           <div class="leader-player">
             <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
-            <small>${playerStory(player, index + 1, ranked)}</small>
+            <small class="placement-message">${playerStory(player, index + 1)}</small>
           </div>
           ${movementMarkup(player.movement, index + 1, ranked.length)}
           <span class="leader-points">${player.points} Punkte</span>

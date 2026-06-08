@@ -1427,6 +1427,17 @@ footer,
   font-weight: 850;
 }
 
+.placement-message {
+  max-width: 52ch;
+  line-height: 1.35;
+}
+
+.leader-row.rank-1 .placement-message,
+.podium-1 .placement-message {
+  color: #fff4bd;
+  font-weight: 950;
+}
+
 .leader-points {
   justify-self: end;
   border-radius: 8px;
