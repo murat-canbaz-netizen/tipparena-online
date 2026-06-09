@@ -49,13 +49,38 @@ function cleanCount(value) {
   return Math.max(3, Math.min(35, Number(value || 24)));
 }
 
+function cleanClassName(value) {
+  const className = String(value || "").trim().replace(/\s+/g, " ");
+  if (!className) {
+    const error = new Error("Bitte einen Klassennamen eingeben.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (className.length > 40) {
+    const error = new Error("Der Klassenname darf maximal 40 Zeichen lang sein.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!/^[\p{L}\p{N} _./-]+$/u.test(className)) {
+    const error = new Error("Der Klassenname darf nur Buchstaben, Zahlen, Leerzeichen sowie -, _, / und . enthalten.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return className;
+}
+
 function codePart(value, fallback) {
   return cleanString(value, fallback)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/gi, "SS")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "") || fallback;
+}
+
+function classCodePart(value) {
+  return codePart(value, "KLASSE").slice(0, 16).replace(/-$/g, "") || "KLASSE";
 }
 
 function randomCode(length) {
@@ -65,7 +90,7 @@ function randomCode(length) {
 
 export async function createRoom(env, room) {
   const school = cleanString(room.school, "Schule");
-  const className = cleanString(room.className || room.class_name, "Klasse");
+  const className = cleanClassName(room.className || room.class_name);
   const existing = await supabase(
     env,
     `rooms?school=eq.${encodeURIComponent(school)}&class_name=eq.${encodeURIComponent(className)}&limit=1`,
@@ -97,7 +122,7 @@ export async function createRoom(env, room) {
 
   const schoolParts = codePart(school, "SCHULE").split("-");
   const schoolShort = schoolParts.at(-1).slice(0, 12);
-  const classCode = `${codePart(className, "KLASSE")}-${schoolShort}-${Math.floor(100 + Math.random() * 900)}`;
+  const classCode = `${classCodePart(className)}-${schoolShort}-${Math.floor(100 + Math.random() * 900)}`;
   const teacherCode = `LEHRER-${randomCode(5)}`;
   const payload = {
     code: classCode,

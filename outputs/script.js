@@ -357,6 +357,14 @@ function slugify(value) {
     .replace(/(^-|-$)/g, "");
 }
 
+function normalizeClassName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function validClassName(value) {
+  return value.length >= 1 && value.length <= 40 && /^[\p{L}\p{N} _./-]+$/u.test(value);
+}
+
 function createClassCode(school, classNameValue) {
   const cleanSchool = slugify(school).toUpperCase() || "SCHULE";
   const cleanClass = slugify(classNameValue).toUpperCase() || "KLASSE";
@@ -1354,8 +1362,13 @@ teacherLinkForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(teacherLinkForm);
   const school = String(formData.get("school")).trim();
-  const classValue = String(formData.get("className")).trim();
+  const classValue = normalizeClassName(formData.get("className"));
   const studentCount = String(formData.get("studentCount")).trim();
+  if (!validClassName(classValue)) {
+    generatedLink.innerHTML = '<p class="teacher-feedback is-error">Bitte einen Klassennamen mit 1 bis 40 Zeichen eingeben. Erlaubt sind Buchstaben, Zahlen, Leerzeichen sowie -, _, / und .</p>';
+    return;
+  }
+  teacherLinkForm.elements.className.value = classValue;
   const room = {
     school,
     className: classValue,
