@@ -1,0 +1,242 @@
+body.start-variant-b:not(.is-authenticated):not(.is-admin) {
+  background: #07120e;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin)::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 50% 115%, rgba(124, 255, 76, 0.2), transparent 42%),
+    linear-gradient(155deg, #07120e, #0d2530 58%, #091711);
+  background-size: 38px 38px, 38px 38px, auto, auto;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .topbar {
+  top: 18px;
+  width: min(100% - 36px, 900px);
+  margin: 0 auto;
+  border: 1px solid rgba(184, 255, 77, 0.2);
+  border-radius: 16px;
+  padding: 7px;
+  background: rgba(7, 18, 14, 0.78);
+  box-shadow:
+    0 22px 52px rgba(0, 0, 0, 0.32),
+    0 0 36px rgba(184, 255, 77, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .home-tabs {
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .home-tabs button {
+  min-height: 50px;
+  border-radius: 11px;
+  color: rgba(255, 255, 255, 0.64);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .home-tabs button.is-active {
+  background: linear-gradient(135deg, #b8ff4d, #77df52);
+  color: #08130e;
+  box-shadow: 0 0 30px rgba(184, 255, 77, 0.26);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(380px, 0.9fr) minmax(560px, 1.1fr);
+  gap: clamp(30px, 5vw, 76px);
+  align-items: center;
+  width: min(100% - 50px, 1540px);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 116px 0 54px;
+  background: transparent;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero::before {
+  content: "MATCHDAY";
+  position: absolute;
+  z-index: -1;
+  inset: 5% auto auto -2%;
+  color: rgba(255, 255, 255, 0.025);
+  font-family: "Arial Black", sans-serif;
+  font-size: clamp(8rem, 19vw, 20rem);
+  font-style: italic;
+  letter-spacing: -0.08em;
+  line-height: 0.8;
+  pointer-events: none;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-media {
+  order: 2;
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(570px, 76vh, 820px);
+  border: 1px solid rgba(184, 255, 77, 0.22);
+  border-radius: 30px;
+  background: #10231b;
+  box-shadow:
+    0 42px 100px rgba(0, 0, 0, 0.48),
+    0 0 60px rgba(184, 255, 77, 0.1);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-media::before {
+  content: "LIVE · DEINE KLASSE · DEINE TIPPS";
+  position: absolute;
+  z-index: 3;
+  inset: 24px auto auto 24px;
+  border: 1px solid rgba(184, 255, 77, 0.42);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(7, 18, 14, 0.72);
+  color: #b8ff4d;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  backdrop-filter: blur(12px);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-media::after {
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(5, 15, 11, 0.08), rgba(5, 15, 11, 0.12) 50%, rgba(5, 15, 11, 0.88)),
+    radial-gradient(circle at 50% 0%, rgba(184, 255, 77, 0.12), transparent 42%);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.12) contrast(1.08);
+  transform: scale(1.03);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-copy {
+  order: 1;
+  width: 100%;
+  max-width: 720px;
+  margin: 0;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-logo {
+  width: min(100%, 500px);
+  margin-bottom: 6px;
+  filter:
+    drop-shadow(0 0 18px rgba(184, 255, 77, 0.18))
+    drop-shadow(0 24px 40px rgba(0, 0, 0, 0.34));
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-copy > .eyebrow {
+  width: fit-content;
+  border-left: 4px solid #b8ff4d;
+  padding: 7px 12px;
+  color: #b8ff4d;
+  background: rgba(184, 255, 77, 0.06);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-copy > h1 {
+  margin: 12px 0 22px;
+  color: white;
+  font-family: "Arial Black", "Bahnschrift", sans-serif;
+  font-size: clamp(4rem, 8vw, 8.4rem);
+  font-style: italic;
+  letter-spacing: -0.09em;
+  line-height: 0.86;
+  text-shadow: 0 12px 34px rgba(0, 0, 0, 0.38);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-join {
+  overflow: visible;
+  width: 100%;
+  border: 1px solid rgba(184, 255, 77, 0.2);
+  border-radius: 22px;
+  padding: clamp(20px, 3vw, 30px);
+  color: white;
+  background:
+    linear-gradient(145deg, rgba(18, 41, 32, 0.9), rgba(7, 18, 14, 0.92));
+  box-shadow:
+    0 30px 74px rgba(0, 0, 0, 0.36),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-join label {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-class-pass {
+  border: 1px solid rgba(184, 255, 77, 0.16);
+  border-radius: 11px;
+  background: rgba(184, 255, 77, 0.07);
+  color: #b8ff4d;
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-join input {
+  border-color: rgba(255, 255, 255, 0.16);
+  border-radius: 11px;
+  color: white;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-join input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-join > .button.primary {
+  min-height: 58px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #b8ff4d, #6ed84c);
+  color: #08130e;
+  box-shadow: 0 0 34px rgba(184, 255, 77, 0.22);
+}
+
+body.start-variant-b:not(.is-authenticated):not(.is-admin) .teacher-manage {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 1120px) {
+  body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero {
+    grid-template-columns: 1fr;
+    width: min(100% - 28px, 850px);
+    padding-top: 108px;
+  }
+
+  body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-media {
+    order: 1;
+    min-height: 380px;
+  }
+
+  body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-copy {
+    order: 2;
+  }
+}
+
+@media (max-width: 620px) {
+  body.start-variant-b:not(.is-authenticated):not(.is-admin) .topbar {
+    top: 8px;
+    width: calc(100% - 16px);
+  }
+
+  body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero {
+    width: min(100% - 18px, 850px);
+    gap: 18px;
+    padding-top: 88px;
+  }
+
+  body.start-variant-b:not(.is-authenticated):not(.is-admin) .hero-media {
+    min-height: 280px;
+    border-radius: 20px;
+  }
+}
