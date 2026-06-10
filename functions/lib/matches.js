@@ -75,6 +75,29 @@ const matchKickoffs = new Map([
   ["l6", "2026-06-27T23:00:00+02:00"],
 ]);
 
+const matchTeams = [
+  ["Mexiko", "Südafrika"], ["Südkorea", "Tschechien"], ["Tschechien", "Südafrika"], ["Mexiko", "Südkorea"], ["Tschechien", "Mexiko"], ["Südafrika", "Südkorea"],
+  ["Kanada", "Bosnien-Herzeg."], ["Katar", "Schweiz"], ["Schweiz", "Bosnien-Herzeg."], ["Kanada", "Katar"], ["Schweiz", "Kanada"], ["Bosnien-Herzeg.", "Katar"],
+  ["Brasilien", "Marokko"], ["Haiti", "Schottland"], ["Schottland", "Marokko"], ["Brasilien", "Haiti"], ["Schottland", "Brasilien"], ["Marokko", "Haiti"],
+  ["USA", "Paraguay"], ["Australien", "Türkei"], ["USA", "Australien"], ["Türkei", "Paraguay"], ["Türkei", "USA"], ["Paraguay", "Australien"],
+  ["Deutschland", "Curacao"], ["Elfenbeink.", "Ecuador"], ["Deutschland", "Elfenbeink."], ["Ecuador", "Curacao"], ["Ecuador", "Deutschland"], ["Curacao", "Elfenbeink."],
+  ["Niederlande", "Japan"], ["Schweden", "Tunesien"], ["Niederlande", "Schweden"], ["Tunesien", "Japan"], ["Tunesien", "Niederlande"], ["Japan", "Schweden"],
+  ["Belgien", "Ägypten"], ["Iran", "Neuseeland"], ["Belgien", "Iran"], ["Neuseeland", "Ägypten"], ["Neuseeland", "Belgien"], ["Ägypten", "Iran"],
+  ["Spanien", "Kap Verde"], ["Saudi-Arabien", "Uruguay"], ["Spanien", "Saudi-Arabien"], ["Uruguay", "Kap Verde"], ["Uruguay", "Spanien"], ["Kap Verde", "Saudi-Arabien"],
+  ["Frankreich", "Senegal"], ["Irak", "Norwegen"], ["Frankreich", "Irak"], ["Norwegen", "Senegal"], ["Norwegen", "Frankreich"], ["Senegal", "Irak"],
+  ["Argentinien", "Algerien"], ["Österreich", "Jordanien"], ["Argentinien", "Österreich"], ["Jordanien", "Algerien"], ["Jordanien", "Argentinien"], ["Algerien", "Österreich"],
+  ["Portugal", "DR Kongo"], ["Usbekistan", "Kolumbien"], ["Portugal", "Usbekistan"], ["Kolumbien", "DR Kongo"], ["Kolumbien", "Portugal"], ["DR Kongo", "Usbekistan"],
+  ["England", "Kroatien"], ["Ghana", "Panama"], ["England", "Ghana"], ["Panama", "Kroatien"], ["Panama", "England"], ["Kroatien", "Ghana"],
+];
+
+export const matchCatalog = [...matchKickoffs.entries()].map(([id, kickoff], index) => ({
+  id,
+  group: id[0].toUpperCase(),
+  kickoff,
+  home: matchTeams[index][0],
+  away: matchTeams[index][1],
+}));
+
 export function matchKickoff(matchId) {
   const kickoff = matchKickoffs.get(String(matchId || "").trim().toLowerCase());
   return kickoff ? Date.parse(kickoff) : null;

@@ -60,18 +60,47 @@ function adminAvatarPath(avatar) {
   return `/avatars/${safeAvatar}.png`;
 }
 
+function renderMissingPicks(player) {
+  const missingPicks = Array.isArray(player.missingPicks) ? player.missingPicks : [];
+  if (!missingPicks.length) return '<p class="superadmin-picks-complete">Alle Spiele wurden getippt.</p>';
+  return `
+    <details class="superadmin-missing-picks">
+      <summary>Fehlende Tipps anzeigen (${missingPicks.length})</summary>
+      <div class="superadmin-missing-list">
+        ${missingPicks.map((match) => `
+          <div class="${match.closed ? "is-closed" : "is-open"}">
+            <span>Gruppe ${escapeAdminText(match.group)} · ${escapeAdminText(formatAdminDate(match.kickoff))}</span>
+            <strong>${escapeAdminText(match.home)} – ${escapeAdminText(match.away)}</strong>
+            <em>${match.closed ? "bereits geschlossen" : "noch tippbar"}</em>
+          </div>`).join("")}
+      </div>
+    </details>`;
+}
+
 function renderAdminPlayers(room) {
   const players = Array.isArray(room.players) ? room.players : [];
   if (!players.length) return '<p class="superadmin-player-empty">Noch keine Spieler in diesem Raum.</p>';
   return `
     <div class="superadmin-player-list">
-      ${players.map((player) => `
-        <article class="superadmin-player">
+      ${players.map((player) => {
+        const pickCount = Number(player.pickCount || 0);
+        const missingOpenCount = Number(player.missingOpenCount || 0);
+        const statusClass = pickCount === 0 ? "is-empty" : missingOpenCount === 0 ? "is-complete" : "is-partial";
+        const statusText = pickCount === 0
+          ? "Noch keine Tipps gespeichert"
+          : missingOpenCount === 0
+            ? "Alle offenen Spiele getippt"
+            : `${missingOpenCount} offene Tipps fehlen`;
+        return `
+        <article class="superadmin-player ${statusClass}">
           <img src="${adminAvatarPath(player.avatar)}" alt="" />
           <strong>${escapeAdminText(player.nickname)}</strong>
-          <span><b>${Number(player.pickCount || 0)}</b> gespeicherte Tipps</span>
+          <span><b>${pickCount}</b> Tipps gespeichert</span>
           <span><b>${Number(player.points || 0)}</b> Punkte</span>
-        </article>`).join("")}
+          <p class="superadmin-pick-status">${escapeAdminText(statusText)}</p>
+          ${renderMissingPicks(player)}
+        </article>`;
+      }).join("")}
     </div>`;
 }
 

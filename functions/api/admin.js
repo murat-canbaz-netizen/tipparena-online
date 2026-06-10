@@ -1,4 +1,5 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
+import { matchCatalog } from "../lib/matches.js";
 
 function latestDate(...values) {
   return values
@@ -58,6 +59,7 @@ export async function onRequest(context) {
       .map((room) => {
         const roomPlayers = players.filter((player) => player.room_code === room.code);
         const roomPicks = picks.filter((pick) => pick.room_code === room.code);
+        const now = Date.now();
         return {
           roomCode: room.code,
           teacherCode: teacherCodes.get(room.code) || null,
@@ -69,10 +71,21 @@ export async function onRequest(context) {
           players: roomPlayers
             .map((player) => {
               const playerPicks = roomPicks.filter((pick) => pick.player_id === player.id);
+              const pickedMatchIds = new Set(playerPicks.map((pick) => pick.match_id));
+              const missingPicks = matchCatalog
+                .filter((match) => !pickedMatchIds.has(match.id))
+                .map((match) => ({
+                  ...match,
+                  closed: now >= Date.parse(match.kickoff),
+                }));
               return {
                 nickname: player.nickname,
                 avatar: player.avatar,
                 pickCount: playerPicks.length,
+                totalMatchCount: matchCatalog.length,
+                missingOpenCount: missingPicks.filter((match) => !match.closed).length,
+                missingClosedCount: missingPicks.filter((match) => match.closed).length,
+                missingPicks,
                 points: playerPicks.reduce(
                   (sum, pick) => sum + scorePick(
                     [Number(pick.home_score), Number(pick.away_score)],
