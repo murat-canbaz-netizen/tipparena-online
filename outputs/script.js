@@ -314,6 +314,8 @@ const demoNames = [
 
 const userPicks = {};
 const draftPicks = {};
+const pendingPickSaves = new Set();
+const pickSaveMessages = {};
 const exactCelebrationStorageKey = "tipparenaExactCelebrations";
 const confettiPaths = [
   [-112, 74, -150], [-88, 112, 120], [-64, 58, 210], [-42, 126, -90],
@@ -453,7 +455,6 @@ function avatarMarkup(value) {
 }
 
 async function apiRequest(path, options = {}, endpoint = `/api/${path}`) {
-  if (!remoteState.online) return null;
   try {
     const response = await fetch(endpoint, {
       ...options,
@@ -464,11 +465,11 @@ async function apiRequest(path, options = {}, endpoint = `/api/${path}`) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return { error: data.error || "Online-Speicherung nicht erreichbar.", status: response.status };
+    remoteState.online = true;
     return data;
   } catch (error) {
-    remoteState.online = false;
-    console.warn("TippArena speichert lokal, bis die Online-Datenbank verbunden ist.", error);
-    return null;
+    console.warn("TippArena-Anfrage fehlgeschlagen. Die nächste Anfrage versucht es erneut.", error);
+    return { error: "Online-Speicherung nicht erreichbar.", networkError: true };
   }
 }
 
@@ -506,9 +507,11 @@ async function syncRoom() {
 }
 
 async function syncPicks() {
-  if (!classState.code) return;
+  if (!classState.code) return { synced: false, error: "Klassenraum fehlt." };
   const data = await apiRequest("picks", {}, `/api/picks?room=${encodeURIComponent(classState.code)}`);
-  if (!data || data.error) return;
+  if (!data || data.error) {
+    return { synced: false, error: data?.error || "Serverstand konnte nicht geladen werden." };
+  }
   remoteState.players = data.players || remoteState.players;
   setRemotePicks(data.picks || []);
 
@@ -519,6 +522,7 @@ async function syncPicks() {
     });
   }
   renderAll();
+  return { synced: true };
 }
 
 const resultTeamAliases = {
@@ -671,7 +675,7 @@ async function createRemotePlayer(nickname, avatar) {
 }
 
 async function saveRemotePick(matchId, pick) {
-  if (!classState.code || !classState.playerId || !remoteState.online) {
+  if (!classState.code || !classState.playerId) {
     return { saved: false, error: "Online-Speicherung nicht erreichbar." };
   }
   const match = matches.find((entry) => entry.id === matchId);
@@ -692,8 +696,31 @@ async function saveRemotePick(matchId, pick) {
     },
     "/api/picks",
   );
-  if (!data?.picks) return { saved: false, status: data?.status, error: data?.error || "Speichern fehlgeschlagen." };
-  await syncPicks();
+  if (!data?.picks) {
+    return {
+      saved: false,
+      status: data?.status,
+      error: data?.status === 409
+        ? data.error
+        : "Tipp konnte nicht gespeichert werden. Bitte noch einmal auf Speichern tippen.",
+    };
+  }
+  const syncResult = await syncPicks();
+  if (!syncResult.synced) {
+    return {
+      saved: false,
+      submitted: true,
+      error: "Tipp wurde gesendet, konnte aber nicht überprüft werden. Bitte kurz neu laden oder erneut prüfen.",
+    };
+  }
+  const verifiedPick = remotePicksForPlayer(classState.playerId)[matchId];
+  if (!verifiedPick || verifiedPick[0] !== pick[0] || verifiedPick[1] !== pick[1]) {
+    return {
+      saved: false,
+      submitted: true,
+      error: "Tipp wurde gesendet, konnte aber nicht überprüft werden. Bitte kurz neu laden oder erneut prüfen.",
+    };
+  }
   return { saved: true };
 }
 
@@ -975,9 +1002,11 @@ function renderMatches() {
 
 function renderMatchCard(match) {
   const savedPick = userPicks[match.id];
-  const pick = draftPicks[match.id] || savedPick || [0, 0];
+  const hasDraft = Object.prototype.hasOwnProperty.call(draftPicks, match.id);
+  const pick = hasDraft ? draftPicks[match.id] : savedPick || [0, 0];
   const isSaved = Boolean(savedPick);
-  const hasUnsavedChanges = isSaved && (pick[0] !== savedPick[0] || pick[1] !== savedPick[1]);
+  const hasUnsavedChanges = hasDraft;
+  const isSaving = pendingPickSaves.has(match.id);
   const points = scorePick(savedPick, match.result);
   const locked = isMatchClosed(match);
   const pointClass = match.result ? `points-${points}` : "";
@@ -990,7 +1019,10 @@ function renderMatchCard(match) {
     : "Dieses Spiel kann nicht mehr getippt werden.";
   const saveLabel = locked
     ? isSaved ? "Gespeichert ✓" : "Nicht getippt"
-    : isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : "Tipp speichern";
+    : isSaving
+      ? "Speichere..."
+      : pickSaveMessages[match.id]
+        || (isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : hasUnsavedChanges ? "Noch nicht gespeichert – Tipp speichern" : "Tipp speichern");
   return `
     <article class="match-card ${match.status} ${locked ? "locked" : ""} ${pointClass} ${newExactSuccess ? "new-exact-success" : ""}" data-match-card="${match.id}">
       <div class="match-meta">
@@ -1018,7 +1050,7 @@ function renderMatchCard(match) {
           <button class="score-step" type="button" aria-label="Tipp ${match.away} erhöhen" data-match="${match.id}" data-side="1" data-step="1" ${locked ? "disabled" : ""}>+</button>
         </div>
         <strong class="${points === 3 ? `exact-points-badge ${newExactSuccess ? "is-new-exact" : ""}` : ""}">${pointsLabel}</strong>
-        <button class="save-pick-button ${isSaved && !hasUnsavedChanges ? "is-saved" : ""}" type="button" data-save-pick="${match.id}" ${locked ? "disabled" : ""}>${saveLabel}</button>
+        <button class="save-pick-button ${isSaved && !hasUnsavedChanges ? "is-saved" : ""}" type="button" data-save-pick="${match.id}" ${locked || isSaving ? "disabled" : ""}>${saveLabel}</button>
         ${bravo}
       </div>
       ${locked ? `<p class="match-lock-message">${lockMessage}</p>` : ""}
@@ -1514,6 +1546,12 @@ appTabs.forEach((tab) => {
 
 window.addEventListener("hashchange", updateAppView);
 
+window.addEventListener("beforeunload", (event) => {
+  if (!Object.keys(draftPicks).length && !pendingPickSaves.size) return;
+  event.preventDefault();
+  event.returnValue = "Es gibt noch ungespeicherte Tipps.";
+});
+
 groupTabs.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-group]");
   if (!button) return;
@@ -1536,9 +1574,10 @@ matchList.addEventListener("input", (event) => {
   const value = field.value === "" ? 0 : Math.max(0, Math.min(20, Number(field.value)));
   draftPicks[matchId] = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
   draftPicks[matchId][side] = value;
+  delete pickSaveMessages[matchId];
   const saveButton = matchList.querySelector(`[data-save-pick="${matchId}"]`);
   if (saveButton) {
-    saveButton.textContent = "Tipp speichern";
+    saveButton.textContent = "Noch nicht gespeichert – Tipp speichern";
     saveButton.classList.remove("is-saved");
   }
 });
@@ -1552,24 +1591,41 @@ matchList.addEventListener("click", (event) => {
   const saveButton = event.target.closest("[data-save-pick]");
   if (saveButton && !saveButton.disabled) {
     const matchId = saveButton.dataset.savePick;
+    if (pendingPickSaves.has(matchId)) return;
     const match = matches.find((entry) => entry.id === matchId);
     if (!match || isMatchClosed(match)) {
       showLockedMatchMessage(matchId);
       return;
     }
     const pickToSave = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
+    draftPicks[matchId] = [...pickToSave];
+    pendingPickSaves.add(matchId);
+    delete pickSaveMessages[matchId];
     saveButton.disabled = true;
-    saveButton.textContent = "Wird gespeichert...";
+    saveButton.textContent = "Speichere...";
     saveRemotePick(matchId, pickToSave).then((result) => {
+      pendingPickSaves.delete(matchId);
       if (!result.saved) {
         saveButton.disabled = result.status === 409;
-        saveButton.textContent = result.error || "Speichern fehlgeschlagen";
+        pickSaveMessages[matchId] = result.status === 409
+          ? result.error
+          : result.error || "Tipp konnte nicht gespeichert werden. Bitte noch einmal auf Speichern tippen.";
+        saveButton.textContent = pickSaveMessages[matchId];
         return;
       }
       userPicks[matchId] = pickToSave;
-      delete draftPicks[matchId];
+      const currentDraft = draftPicks[matchId];
+      if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
+        delete draftPicks[matchId];
+      }
+      delete pickSaveMessages[matchId];
       renderMatches();
       renderLeaderboard();
+    }).catch(() => {
+      pendingPickSaves.delete(matchId);
+      pickSaveMessages[matchId] = "Tipp konnte nicht gespeichert werden. Bitte noch einmal auf Speichern tippen.";
+      saveButton.disabled = false;
+      saveButton.textContent = pickSaveMessages[matchId];
     });
     return;
   }
@@ -1586,6 +1642,7 @@ matchList.addEventListener("click", (event) => {
   const step = Number(button.dataset.step);
   draftPicks[matchId] = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
   draftPicks[matchId][side] = Math.max(0, Math.min(20, Number(draftPicks[matchId][side] || 0) + step));
+  delete pickSaveMessages[matchId];
   renderMatches();
 });
 
