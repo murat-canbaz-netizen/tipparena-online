@@ -667,7 +667,7 @@ async function createRemotePlayer(nickname, avatar) {
     ...remoteState.players.filter((player) => player.id !== data.player.id),
     data.player,
   ];
-  return data.player;
+  return { ...data.player, existing: Boolean(data.existing) };
 }
 
 async function saveRemotePick(matchId, pick) {
@@ -1301,10 +1301,13 @@ async function joinArena(nickname, avatar, messageTarget) {
     messageTarget.style.color = "#ff8278";
     return;
   }
-  classState.joinedName = nickname;
-  classState.avatar = selectedAvatar;
+  classState.joinedName = player.nickname || nickname;
+  classState.avatar = player.avatar || selectedAvatar;
   rememberSession();
-  messageTarget.textContent = `${nickname} ist drin.`;
+  Object.keys(userPicks).forEach((matchId) => delete userPicks[matchId]);
+  Object.keys(draftPicks).forEach((matchId) => delete draftPicks[matchId]);
+  await syncPicks();
+  messageTarget.textContent = player.existing ? `${classState.joinedName} ist wieder drin.` : `${classState.joinedName} ist drin.`;
   messageTarget.style.color = "#b8ff4d";
   renderAll();
   history.replaceState(null, "", `${window.location.pathname}${window.location.search}#arena`);
@@ -1324,17 +1327,25 @@ heroJoinForm.addEventListener("submit", async (event) => {
   await joinArena(nickname, avatar, heroJoinMessage);
 });
 
+function normalizeClassCodeInput(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "";
+
+  let candidate = raw;
+  if (/\/klasse\//i.test(raw)) {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    candidate = decodeURIComponent(url.pathname.match(/\/klasse\/([^/]+)/i)?.[1] || "");
+  }
+
+  const code = candidate.trim().replace(/\/+$/, "").toUpperCase();
+  return /^[A-Z0-9]+(?:-[A-Z0-9]+)+$/.test(code) ? code : "";
+}
+
 async function applyClassLink(classLink, messageTarget) {
   try {
-    const raw = String(classLink || "").trim();
-    let code = raw.toUpperCase();
-    if (raw.includes("/") || raw.includes("?")) {
-      const url = new URL(raw, window.location.origin);
-      const pathMatch = url.pathname.match(/\/klasse\/([^/]+)/i);
-      code = decodeURIComponent(pathMatch?.[1] || url.searchParams.get("code") || "").toUpperCase();
-    }
+    const code = normalizeClassCodeInput(classLink);
     if (!code) {
-      messageTarget.textContent = "Bitte einen Klassencode oder Klassenlink eingeben.";
+      messageTarget.textContent = "Bitte gib einen gültigen Klassencode oder Klassenlink ein.";
       messageTarget.style.color = "#d95c4f";
       return false;
     }
@@ -1352,7 +1363,7 @@ async function applyClassLink(classLink, messageTarget) {
     renderAll();
     return true;
   } catch {
-    messageTarget.textContent = "Bitte einen gültigen Klassenlink einfügen.";
+    messageTarget.textContent = "Bitte gib einen gültigen Klassencode oder Klassenlink ein.";
     messageTarget.style.color = "#d95c4f";
     return false;
   }
