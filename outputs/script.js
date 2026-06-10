@@ -754,7 +754,7 @@ function updateClassDisplay() {
 
 function rememberSession() {
   if (!classState.code || !classState.joinedName) return;
-  localStorage.setItem(
+  sessionStorage.setItem(
     storageKey,
     JSON.stringify({
       code: classState.code,
@@ -790,7 +790,8 @@ function adminRoomFallback() {
 }
 
 function restoreSession() {
-  const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+  localStorage.removeItem(storageKey);
+  const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
   if (!saved || saved.code !== classState.code) return;
   classState.school = saved.school || classState.school;
   classState.className = saved.className || classState.className;
