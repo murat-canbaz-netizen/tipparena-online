@@ -15,15 +15,21 @@ export async function onRequest(context) {
       if (!room) return jsonResponse(400, { error: "Raumcode fehlt." });
 
       const encodedRoom = encodeURIComponent(room);
-      const players = await supabase(
-        env,
-        `players?room_code=eq.${encodedRoom}&select=id,nickname,avatar,created_at&order=created_at.asc`,
-      );
-      const picks = await supabase(
-        env,
-        `picks?room_code=eq.${encodedRoom}&select=player_id,match_id,home_score,away_score,updated_at`,
-      );
-      return jsonResponse(200, { players, picks });
+      const [players, picks, snapshots] = await Promise.all([
+        supabase(
+          env,
+          `players?room_code=eq.${encodedRoom}&select=id,nickname,avatar,created_at&order=created_at.asc`,
+        ),
+        supabase(
+          env,
+          `picks?room_code=eq.${encodedRoom}&select=player_id,match_id,home_score,away_score,updated_at`,
+        ),
+        supabase(
+          env,
+          `leaderboard_snapshots?room_code=eq.${encodedRoom}&select=snapshot&limit=1`,
+        ),
+      ]);
+      return jsonResponse(200, { players, picks, leaderboard: snapshots[0]?.snapshot || [] });
     }
 
     if (request.method === "POST") {

@@ -1,5 +1,6 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
 import { matchKickoff } from "../lib/matches.js";
+import { refreshLeaderboardSnapshotsForManualResult } from "../lib/leaderboard.js";
 
 const allowedStatuses = new Set(["open", "live", "finished"]);
 
@@ -68,7 +69,19 @@ export async function onRequest(context) {
       }),
     });
 
-    const response = jsonResponse(200, { success: true, result: rows[0] });
+    let leaderboardWarning = null;
+    try {
+      await refreshLeaderboardSnapshotsForManualResult(
+        env,
+        matchId,
+        status === "open" ? null : [homeScore, awayScore],
+      );
+    } catch (error) {
+      leaderboardWarning = "Das Ergebnis wurde gespeichert, die Ranglistenbewegung konnte aber nicht aktualisiert werden.";
+      console.error("Ranglisten-Snapshot konnte nicht aktualisiert werden.", error.message);
+    }
+
+    const response = jsonResponse(200, { success: true, result: rows[0], ...(leaderboardWarning ? { warning: leaderboardWarning } : {}) });
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (error) {

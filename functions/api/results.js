@@ -1,4 +1,5 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
+import { refreshLeaderboardSnapshots } from "../lib/leaderboard.js";
 
 const apiUrl = "https://v3.football.api-sports.io/fixtures";
 const liveStatuses = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE", "live"]);
@@ -42,8 +43,15 @@ function normalizeManualResult(entry) {
   };
 }
 
-function mergedResponse(apiData, manualFixtures) {
+async function mergedResponse(env, apiData, manualFixtures, updateSnapshot = true) {
   const fixtures = [...(apiData.fixtures || []), ...manualFixtures];
+  if (updateSnapshot) {
+    try {
+      await refreshLeaderboardSnapshots(env, fixtures);
+    } catch (error) {
+      console.error("Ranglisten-Snapshot konnte nicht aktualisiert werden.", error.message);
+    }
+  }
   const response = jsonResponse(200, {
     ...apiData,
     fixtures,
@@ -141,7 +149,7 @@ export async function onRequest(context) {
         query: Object.fromEntries(query),
       };
       console.error("API-Football Diagnose", diagnostic);
-      return mergedResponse({
+      return await mergedResponse(env, {
         results: 0,
         warning: "Live-Ergebnisse sind noch nicht konfiguriert. Manuelle Ergebnisse werden verwendet.",
         ...(adminTest.authorized ? { diagnostic } : {}),
@@ -152,7 +160,15 @@ export async function onRequest(context) {
     const cache = caches.default;
     const cacheKey = new Request(`${new URL(request.url).origin}/api/results?${query}`);
     const cachedResponse = adminTest.authorized ? null : await cache.match(cacheKey);
-    if (cachedResponse) return mergedResponse(await cachedResponse.json(), manualFixtures);
+    if (cachedResponse) {
+      const cachedData = await cachedResponse.json();
+      return await mergedResponse(
+        env,
+        cachedData,
+        manualFixtures,
+        !cachedData.rateLimited && Boolean(cachedData.fixtures?.length),
+      );
+    }
 
     const apiResponse = await fetch(`${apiUrl}?${query}`, {
       headers: { "x-apisports-key": apiKey },
@@ -175,18 +191,18 @@ export async function onRequest(context) {
       const cachedRateLimit = jsonResponse(200, apiData);
       cachedRateLimit.headers.set("Cache-Control", `public, max-age=${rateLimitCacheSeconds}`);
       if (!adminTest.authorized) context.waitUntil(cache.put(cacheKey, cachedRateLimit));
-      return mergedResponse(apiData, manualFixtures);
+      return await mergedResponse(env, apiData, manualFixtures, false);
     }
 
     if (!apiResponse.ok || data.errors?.length || Object.keys(data.errors || {}).length) {
       const diagnostic = apiErrorDetails(apiResponse, data, query, apiKey);
       console.error("API-Football Diagnose", diagnostic);
-      return mergedResponse({
+      return await mergedResponse(env, {
         fixtures: [],
         warning: "API-Football konnte keine Live-Ergebnisse liefern. Manuelle Ergebnisse werden verwendet.",
         ...(adminTest.authorized ? { diagnostic } : {}),
         nextUpdateSeconds: idleCacheSeconds,
-      }, manualFixtures);
+      }, manualFixtures, false);
     }
 
     const fixtures = Array.isArray(data.response) ? data.response.map(normalizeFixture) : [];
@@ -212,7 +228,7 @@ export async function onRequest(context) {
     const cachedApiResponse = jsonResponse(200, apiData);
     cachedApiResponse.headers.set("Cache-Control", `public, max-age=${cacheSeconds}`);
     if (!adminTest.authorized) context.waitUntil(cache.put(cacheKey, cachedApiResponse));
-    return mergedResponse(apiData, manualFixtures);
+    return await mergedResponse(env, apiData, manualFixtures, fixtures.length > 0);
   } catch (error) {
     const diagnostic = {
       category: "network_or_server_error",

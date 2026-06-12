@@ -319,7 +319,7 @@ superAdminSection?.addEventListener("submit", async (event) => {
     }
     await window.tipparenaRefreshResults();
     button.textContent = "Ergebnis gespeichert ✓";
-    if (message) message.textContent = "Ergebnis gespeichert ✓";
+    if (message) message.textContent = data.warning || "Ergebnis gespeichert ✓";
   } catch (error) {
     if (message) message.textContent = error.message || "Ergebnis konnte nicht gespeichert werden.";
     button.textContent = "Speichern fehlgeschlagen";

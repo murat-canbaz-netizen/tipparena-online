@@ -327,6 +327,7 @@ const remoteState = {
   online: true,
   players: [],
   picksByPlayer: {},
+  leaderboardByPlayer: {},
 };
 let liveResultsTimer = null;
 let liveResultsRequestPending = false;
@@ -514,6 +515,10 @@ async function syncPicks() {
   }
   remoteState.players = data.players || remoteState.players;
   setRemotePicks(data.picks || []);
+  remoteState.leaderboardByPlayer = (data.leaderboard || []).reduce((map, entry) => {
+    map[entry.playerId] = entry;
+    return map;
+  }, {});
 
   if (classState.playerId) {
     const savedPicks = remotePicksForPlayer(classState.playerId);
@@ -598,6 +603,7 @@ async function syncResults() {
     (data.fixtures || []).forEach((fixture) => {
       applyLiveFixture(fixture);
     });
+    await syncPicks();
     renderMatches();
     renderLeaderboard();
     scheduleLiveResultsUpdate(data.rateLimited ? 600_000 : data.hasLiveMatches ? 300_000 : 900_000);
@@ -614,6 +620,7 @@ async function refreshResultsNow() {
   if (!response.ok) throw new Error(data.error || "Ergebnisse konnten nicht aktualisiert werden.");
 
   (data.fixtures || []).forEach((fixture) => applyLiveFixture(fixture));
+  await syncPicks();
   renderMatches();
   renderLeaderboard();
   scheduleLiveResultsUpdate(data.rateLimited ? 600_000 : data.hasLiveMatches ? 300_000 : 900_000);
@@ -1157,7 +1164,7 @@ function renderLeaderboard() {
     name: player.nickname,
     avatar: player.avatar,
     picks: player.id === classState.playerId || player.nickname === classState.joinedName ? userPicks : remotePicksForPlayer(player.id),
-    movement: 0,
+    movement: Number(remoteState.leaderboardByPlayer[player.id]?.movement || 0),
     current: player.id === classState.playerId || player.nickname === classState.joinedName,
   }));
   const hasRemoteRows = remoteRows.length > 0;
