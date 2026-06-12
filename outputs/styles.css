@@ -4691,3 +4691,39 @@ body {
   }
 }
 
+/* Keep all three podium cards inside the visible leaderboard container. */
+.leaderboard-podium {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.92fr) minmax(0, 0.64fr);
+  gap: clamp(12px, 1.7vw, 24px);
+  overflow: visible;
+}
+
+.leaderboard-podium > .podium-card {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .leaderboard-podium {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .leaderboard-podium .podium-1,
+  .leaderboard-podium .podium-2,
+  .leaderboard-podium .podium-3 {
+    min-height: 170px;
+    max-height: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .leaderboard-podium {
+    grid-template-columns: 1fr;
+  }
+}
+
