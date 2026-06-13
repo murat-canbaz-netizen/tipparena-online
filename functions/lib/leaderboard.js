@@ -100,6 +100,27 @@ function resultFingerprint(results) {
   return JSON.stringify([...results.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function manualResultFingerprint(results) {
+  return `manual:${JSON.stringify(
+    results
+      .map((entry) => ({
+        matchId: entry.match_id,
+        homeScore: Number(entry.home_score),
+        awayScore: Number(entry.away_score),
+        status: entry.status === "open" ? "open" : "scored",
+      }))
+      .sort((left, right) => left.matchId.localeCompare(right.matchId)),
+  )}`;
+}
+
+function manualResultMap(results) {
+  return new Map(
+    results
+      .filter((entry) => entry.status !== "open")
+      .map((entry) => [entry.match_id, [Number(entry.home_score), Number(entry.away_score)]]),
+  );
+}
+
 function rankRoom(players, picks, results, previous = [], preserveUnchangedMovement = false) {
   const previousByPlayer = new Map(previous.map((entry) => [entry.playerId, entry]));
   return players
@@ -200,12 +221,44 @@ export async function refreshLeaderboardSnapshots(env, fixtures = []) {
   await saveSnapshots(env, rows);
 }
 
-export async function refreshLeaderboardSnapshotsForManualResult(env, matchId, result) {
+export async function ensureLeaderboardSnapshotsBeforeManualResult(env) {
   const data = await loadLeaderboardData(env);
   const snapshotByRoom = new Map(data.snapshots.map((row) => [row.room_code, row]));
+  const missingRooms = data.rooms.filter((room) => !snapshotByRoom.has(room.code));
+  if (!missingRooms.length) return;
+
+  const manualResults = await supabase(
+    env,
+    "manual_results?select=match_id,home_score,away_score,status,minute&order=match_id.asc",
+  );
+  const results = manualResultMap(manualResults);
   const updatedAt = new Date().toISOString();
-  const rows = data.rooms.map((room) => {
-    const previous = snapshotByRoom.get(room.code)?.snapshot || [];
+  await saveSnapshots(env, missingRooms.map((room) => ({
+    room_code: room.code,
+    result_fingerprint: manualResultFingerprint(manualResults),
+    snapshot: rankRoom(
+      data.players.filter((player) => player.room_code === room.code),
+      data.picks.filter((pick) => pick.room_code === room.code),
+      results,
+    ),
+    updated_at: updatedAt,
+  })));
+}
+
+export async function refreshLeaderboardSnapshotsForManualResult(env) {
+  const data = await loadLeaderboardData(env);
+  const manualResults = await supabase(
+    env,
+    "manual_results?select=match_id,home_score,away_score,status,minute&order=match_id.asc",
+  );
+  const fingerprint = manualResultFingerprint(manualResults);
+  const snapshotByRoom = new Map(data.snapshots.map((row) => [row.room_code, row]));
+  const updatedAt = new Date().toISOString();
+  const rows = data.rooms.flatMap((room) => {
+    const previousRow = snapshotByRoom.get(room.code);
+    if (previousRow?.result_fingerprint === fingerprint) return [];
+
+    const previous = previousRow?.snapshot || [];
     const previousByPlayer = new Map(previous.map((entry) => [entry.playerId, entry]));
     const players = data.players.filter((player) => player.room_code === room.code);
     const roomPicks = data.picks.filter((pick) => pick.room_code === room.code);
@@ -213,12 +266,19 @@ export async function refreshLeaderboardSnapshotsForManualResult(env, matchId, r
       .map((player, order) => {
         const previousPlayer = previousByPlayer.get(player.id);
         const scores = { ...(previousPlayer?.scores || {}) };
-        const pick = roomPicks.find((entry) => entry.player_id === player.id && entry.match_id === matchId);
-        if (pick && result) {
-          scores[matchId] = scorePick([Number(pick.home_score), Number(pick.away_score)], result);
-        } else {
-          delete scores[matchId];
-        }
+        manualResults.forEach((manualResult) => {
+          const pick = roomPicks.find(
+            (entry) => entry.player_id === player.id && entry.match_id === manualResult.match_id,
+          );
+          if (pick && manualResult.status !== "open") {
+            scores[manualResult.match_id] = scorePick(
+              [Number(pick.home_score), Number(pick.away_score)],
+              [Number(manualResult.home_score), Number(manualResult.away_score)],
+            );
+          } else {
+            delete scores[manualResult.match_id];
+          }
+        });
         return {
           playerId: player.id,
           nickname: player.nickname,
@@ -242,7 +302,7 @@ export async function refreshLeaderboardSnapshotsForManualResult(env, matchId, r
       });
     return {
       room_code: room.code,
-      result_fingerprint: `manual:${matchId}:${result ? result.join(":") : "open"}:${updatedAt}`,
+      result_fingerprint: fingerprint,
       snapshot: current,
       updated_at: updatedAt,
     };

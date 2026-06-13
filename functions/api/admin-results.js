@@ -1,6 +1,9 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
 import { matchKickoff } from "../lib/matches.js";
-import { refreshLeaderboardSnapshotsForManualResult } from "../lib/leaderboard.js";
+import {
+  ensureLeaderboardSnapshotsBeforeManualResult,
+  refreshLeaderboardSnapshotsForManualResult,
+} from "../lib/leaderboard.js";
 
 const allowedStatuses = new Set(["open", "live", "finished"]);
 
@@ -56,6 +59,28 @@ export async function onRequest(context) {
       return jsonResponse(400, { error: "Bitte eine gültige Spielminute eingeben." });
     }
 
+    const existingResults = await supabase(
+      env,
+      `manual_results?match_id=eq.${encodeURIComponent(matchId)}&select=match_id,home_score,away_score,status,minute,updated_at&limit=1`,
+    );
+    const existingResult = existingResults[0];
+    const unchanged = existingResult
+      && Number(existingResult.home_score) === homeScore
+      && Number(existingResult.away_score) === awayScore
+      && existingResult.status === status
+      && (existingResult.minute ?? null) === minute;
+    if (unchanged) {
+      const response = jsonResponse(200, { success: true, unchanged: true, result: existingResult });
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
+
+    const leaderboardChanged = !existingResult
+      || Number(existingResult.home_score) !== homeScore
+      || Number(existingResult.away_score) !== awayScore
+      || (existingResult.status === "open") !== (status === "open");
+    if (leaderboardChanged) await ensureLeaderboardSnapshotsBeforeManualResult(env);
+
     const rows = await supabase(env, "manual_results?on_conflict=match_id", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
@@ -70,15 +95,13 @@ export async function onRequest(context) {
     });
 
     let leaderboardWarning = null;
-    try {
-      await refreshLeaderboardSnapshotsForManualResult(
-        env,
-        matchId,
-        status === "open" ? null : [homeScore, awayScore],
-      );
-    } catch (error) {
-      leaderboardWarning = "Das Ergebnis wurde gespeichert, die Ranglistenbewegung konnte aber nicht aktualisiert werden.";
-      console.error("Ranglisten-Snapshot konnte nicht aktualisiert werden.", error.message);
+    if (leaderboardChanged) {
+      try {
+        await refreshLeaderboardSnapshotsForManualResult(env);
+      } catch (error) {
+        leaderboardWarning = "Das Ergebnis wurde gespeichert, die Ranglistenbewegung konnte aber nicht aktualisiert werden.";
+        console.error("Ranglisten-Snapshot konnte nicht aktualisiert werden.", error.message);
+      }
     }
 
     const response = jsonResponse(200, { success: true, result: rows[0], ...(leaderboardWarning ? { warning: leaderboardWarning } : {}) });
