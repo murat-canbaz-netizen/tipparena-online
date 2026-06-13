@@ -1071,8 +1071,8 @@ function movementMarkup(movement, rank, totalRanks) {
   if (rank === 1 && visibleMovement < 0) visibleMovement = 0;
   if (rank === totalRanks && visibleMovement > 0) visibleMovement = 0;
 
-  if (visibleMovement > 0) return `<span class="move up">↑ +${visibleMovement}</span>`;
-  if (visibleMovement < 0) return `<span class="move down">↓ ${visibleMovement}</span>`;
+  if (visibleMovement > 0) return `<span class="move up">↑ ${visibleMovement}</span>`;
+  if (visibleMovement < 0) return `<span class="move down">↓ ${Math.abs(visibleMovement)}</span>`;
   return `<span class="move same">→ 0</span>`;
 }
 
@@ -1166,11 +1166,13 @@ function latestFinishedMatch() {
 
 function latestFinishedPickMarkup(player, match) {
   const pick = match && player.picks?.[match.id];
-  if (!pick) return '<small class="latest-finished-pick">–</small>';
-  const points = scorePick(pick, match.result);
+  if (!match) return '<small class="latest-finished-pick">–</small>';
   const homeCode = teamCodes[match.home] || match.home.slice(0, 3).toUpperCase();
   const awayCode = teamCodes[match.away] || match.away.slice(0, 3).toUpperCase();
-  return `<small class="latest-finished-pick ${points === 3 ? "is-perfect" : ""}">${homeCode} ${pick[0]}:${pick[1]} ${awayCode} · +${points} Pkt.</small>`;
+  const matchLabel = `${homeCode}–${awayCode}:`;
+  if (!pick) return `<small class="latest-finished-pick">${matchLabel} –</small>`;
+  const points = scorePick(pick, match.result);
+  return `<small class="latest-finished-pick ${points === 3 ? "is-perfect" : ""}">${matchLabel} ${pick[0]}:${pick[1]} · +${points} Pkt.</small>`;
 }
 
 function renderLeaderboard() {
@@ -1182,6 +1184,7 @@ function renderLeaderboard() {
     avatar: player.avatar,
     picks: player.id === classState.playerId || player.nickname === classState.joinedName ? userPicks : remotePicksForPlayer(player.id),
     movement: Number(remoteState.leaderboardByPlayer[player.id]?.movement || 0),
+    movementMatchId: remoteState.leaderboardByPlayer[player.id]?.movementMatchId || null,
     current: player.id === classState.playerId || player.nickname === classState.joinedName,
   }));
   const hasRemoteRows = remoteRows.length > 0;
@@ -1296,7 +1299,7 @@ function renderLeaderboard() {
           <span class="rank">Platz ${index + 1}</span>
           <div class="leader-player">
             <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
-            ${latestFinishedPickMarkup(player, lastFinishedMatch)}
+            ${latestFinishedPickMarkup(player, matches.find((match) => match.id === player.movementMatchId) || lastFinishedMatch)}
             <small class="placement-message">${playerStory(player, index + 1)}</small>
           </div>
           ${movementMarkup(player.movement, index + 1, ranked.length)}

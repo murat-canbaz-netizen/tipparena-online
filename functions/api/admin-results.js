@@ -97,7 +97,7 @@ export async function onRequest(context) {
     let leaderboardWarning = null;
     if (leaderboardChanged) {
       try {
-        await refreshLeaderboardSnapshotsForManualResult(env);
+        await refreshLeaderboardSnapshotsForManualResult(env, matchId);
       } catch (error) {
         leaderboardWarning = "Das Ergebnis wurde gespeichert, die Ranglistenbewegung konnte aber nicht aktualisiert werden.";
         console.error("Ranglisten-Snapshot konnte nicht aktualisiert werden.", error.message);

@@ -100,6 +100,27 @@ function resultFingerprint(results) {
   return JSON.stringify([...results.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
+function changedResultMatchId(previousFingerprint, results) {
+  let previousEntries = [];
+  try {
+    const manualFingerprint = String(previousFingerprint || "").startsWith("manual:");
+    previousEntries = JSON.parse(manualFingerprint ? previousFingerprint.slice(7) : previousFingerprint || "[]");
+    if (manualFingerprint) {
+      previousEntries = previousEntries.map((entry) => [
+        entry.matchId,
+        entry.status === "open" ? null : [entry.homeScore, entry.awayScore],
+      ]);
+    }
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(previousEntries)) return null;
+  const previous = new Map(previousEntries);
+  const changed = [...new Set([...previous.keys(), ...results.keys()])]
+    .filter((matchId) => JSON.stringify(previous.get(matchId) || null) !== JSON.stringify(results.get(matchId) || null));
+  return changed.length === 1 ? changed[0] : null;
+}
+
 function manualResultFingerprint(results) {
   return `manual:${JSON.stringify(
     results
@@ -121,7 +142,7 @@ function manualResultMap(results) {
   );
 }
 
-function rankRoom(players, picks, results, previous = [], preserveUnchangedMovement = false) {
+function rankRoom(players, picks, results, previous = [], preserveUnchangedMovement = false, movementMatchId = null) {
   const previousByPlayer = new Map(previous.map((entry) => [entry.playerId, entry]));
   return players
     .map((player, order) => {
@@ -158,6 +179,8 @@ function rankRoom(players, picks, results, previous = [], preserveUnchangedMovem
           ? previousPlayer.rank - rank
             || (preserveUnchangedMovement && sameScores ? Number(previousPlayer.movement || 0) : 0)
           : 0,
+        movementMatchId: movementMatchId
+          || (preserveUnchangedMovement && sameScores ? previousPlayer?.movementMatchId || null : null),
         scores: player.scores,
       };
     });
@@ -205,6 +228,7 @@ export async function refreshLeaderboardSnapshots(env, fixtures = []) {
   const rows = existing.rooms.map((room) => {
     const previousRow = snapshotByRoom.get(room.code);
     const previous = previousRow?.snapshot || [];
+    const movementMatchId = changedResultMatchId(previousRow?.result_fingerprint, results);
     return {
       room_code: room.code,
       result_fingerprint: fingerprint,
@@ -214,6 +238,7 @@ export async function refreshLeaderboardSnapshots(env, fixtures = []) {
         results,
         previous,
         String(previousRow?.result_fingerprint || "").startsWith("manual:"),
+        movementMatchId,
       ),
       updated_at: updatedAt,
     };
@@ -245,7 +270,7 @@ export async function ensureLeaderboardSnapshotsBeforeManualResult(env) {
   })));
 }
 
-export async function refreshLeaderboardSnapshotsForManualResult(env) {
+export async function refreshLeaderboardSnapshotsForManualResult(env, movementMatchId) {
   const data = await loadLeaderboardData(env);
   const manualResults = await supabase(
     env,
@@ -297,6 +322,7 @@ export async function refreshLeaderboardSnapshotsForManualResult(env) {
           rank,
           points: player.points,
           movement: previousPlayer ? previousPlayer.rank - rank : 0,
+          movementMatchId,
           scores: player.scores,
         };
       });
