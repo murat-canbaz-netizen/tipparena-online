@@ -1432,6 +1432,22 @@ footer,
   line-height: 1.35;
 }
 
+.leader-player .latest-finished-pick {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(100, 116, 139, 0.09);
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.leader-player .latest-finished-pick.is-perfect {
+  background: rgba(72, 187, 120, 0.14);
+  color: #237a4b;
+}
+
 .leader-row.rank-1 .placement-message,
 .podium-1 .placement-message {
   color: #fff4bd;
@@ -1495,6 +1511,13 @@ footer,
 .leader-row.rank-2 .leader-player small,
 .leader-row.rank-3 .leader-player small {
   color: rgba(255, 255, 255, 0.76);
+}
+
+.leader-row.rank-1 .leader-player .latest-finished-pick.is-perfect,
+.leader-row.rank-2 .leader-player .latest-finished-pick.is-perfect,
+.leader-row.rank-3 .leader-player .latest-finished-pick.is-perfect {
+  background: rgba(184, 255, 77, 0.16);
+  color: #dfffaa;
 }
 
 .leader-row.rank-1 .leader-points,

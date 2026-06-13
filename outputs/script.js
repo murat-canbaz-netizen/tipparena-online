@@ -1156,6 +1156,23 @@ function playerStory(player, rank) {
   return messages[stableMessageIndex(`${player.id || player.name}-${rank}`, messages.length)];
 }
 
+function latestFinishedMatch() {
+  return matches.reduce((latest, match) => {
+    if (match.status !== "done" || !match.result) return latest;
+    if (!latest || matchStartTime(match) >= matchStartTime(latest)) return match;
+    return latest;
+  }, null);
+}
+
+function latestFinishedPickMarkup(player, match) {
+  const pick = match && player.picks?.[match.id];
+  if (!pick) return '<small class="latest-finished-pick">–</small>';
+  const points = scorePick(pick, match.result);
+  const homeCode = teamCodes[match.home] || match.home.slice(0, 3).toUpperCase();
+  const awayCode = teamCodes[match.away] || match.away.slice(0, 3).toUpperCase();
+  return `<small class="latest-finished-pick ${points === 3 ? "is-perfect" : ""}">${homeCode} ${pick[0]}:${pick[1]} ${awayCode} · +${points} Pkt.</small>`;
+}
+
 function renderLeaderboard() {
   const hasCurrentPlayer = Boolean(classState.joinedName);
   const hasClassRoom = Boolean(classState.code);
@@ -1207,6 +1224,7 @@ function renderLeaderboard() {
   }
 
   const podium = ranked.slice(0, 3);
+  const lastFinishedMatch = latestFinishedMatch();
   const currentRank = ranked.findIndex((player) => player.current) + 1;
   const currentPlayer = ranked[currentRank - 1];
   const hottestPlayer = ranked
@@ -1278,6 +1296,7 @@ function renderLeaderboard() {
           <span class="rank">Platz ${index + 1}</span>
           <div class="leader-player">
             <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
+            ${latestFinishedPickMarkup(player, lastFinishedMatch)}
             <small class="placement-message">${playerStory(player, index + 1)}</small>
           </div>
           ${movementMarkup(player.movement, index + 1, ranked.length)}
