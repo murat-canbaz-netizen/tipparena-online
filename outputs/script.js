@@ -1213,6 +1213,9 @@ function renderLeaderboard() {
   const hottestPlayer = ranked
     .map((player) => ({ ...player, streak: exactStreak(player.picks) }))
     .sort((a, b) => b.streak - a.streak || b.points - a.points)[0];
+  const biggestPositiveMovement = Math.max(0, ...ranked.map((player) => player.movement));
+  const comebackPlayers = ranked.filter((player) => player.movement === biggestPositiveMovement && biggestPositiveMovement > 0);
+  const comebackNames = comebackPlayers.map((player) => player.name).join(" & ");
   const pointsToTop = currentPlayer ? Math.max(0, topPlayer.points - currentPlayer.points) : 0;
 
   leaderboard.innerHTML = `
@@ -1228,9 +1231,11 @@ function renderLeaderboard() {
         <small>${hottestPlayer.name} ist gerade im Flow</small>
       </article>
       <article>
-        <span>Challenge</span>
-        <strong>3er-Serie</strong>
-        <small>Schaffst du drei perfekte Tipps nacheinander?</small>
+        <span>🚀 Aufholjäger</span>
+        <strong>${comebackPlayers.length ? comebackNames : "Noch kein Aufholjäger."}</strong>
+        <small>${comebackPlayers.length
+    ? `<b>+${biggestPositiveMovement} ${biggestPositiveMovement === 1 ? "Platz" : "Plätze"}</b><br>Größter Sprung nach oben seit dem letzten Ergebnis.`
+    : "Beim nächsten Ergebnis kann sich alles ändern."}</small>
       </article>
     </div>
     <div class="leaderboard-podium" aria-label="Podium">
