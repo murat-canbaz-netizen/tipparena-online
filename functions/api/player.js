@@ -24,6 +24,14 @@ export async function onRequest(context) {
       return jsonResponse(200, { room, player: existing[0], existing: true });
     }
 
+    const playersInRoom = await supabase(
+      env,
+      `players?room_code=eq.${encodeURIComponent(roomCode)}&select=id`,
+    );
+    if (playersInRoom.length >= Number(room.student_count)) {
+      return jsonResponse(409, { error: "Der Raum ist voll. Bitte wende dich an deine Lehrkraft." });
+    }
+
     const payload = {
       room_code: roomCode,
       nickname,

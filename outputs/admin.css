@@ -126,6 +126,18 @@ body.is-superadmin .superadmin-section {
   background: #eaf3ff;
 }
 
+.superadmin-capacity-warning {
+  display: block;
+  margin-top: 5px;
+  color: #a86517;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.superadmin-room-row.is-over-capacity td {
+  background: rgba(255, 247, 230, 0.58);
+}
+
 .superadmin-player-detail td {
   padding: 18px;
   background: #f4f7fb;

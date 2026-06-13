@@ -38,7 +38,7 @@ export async function onRequest(context) {
 
   try {
     const [roomRows, players, picks, manualResults] = await Promise.all([
-      supabase(env, "rooms?select=code,school,class_name,created_at&order=created_at.desc"),
+      supabase(env, "rooms?select=code,school,class_name,student_count,created_at&order=created_at.desc"),
       supabase(env, "players?select=id,room_code,nickname,avatar,created_at"),
       supabase(env, "picks?select=room_code,player_id,match_id,home_score,away_score,updated_at"),
       supabase(env, "manual_results?select=match_id,home_score,away_score,status"),
@@ -67,6 +67,7 @@ export async function onRequest(context) {
           className: room.class_name,
           createdAt: room.created_at || null,
           playerCount: roomPlayers.length,
+          playerLimit: Number(room.student_count || 0),
           pickCount: roomPicks.length,
           players: roomPlayers
             .map((player) => {

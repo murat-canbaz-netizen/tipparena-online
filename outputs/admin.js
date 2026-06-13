@@ -119,13 +119,16 @@ function renderSuperAdmin(data) {
           <thead><tr><th>Schule</th><th>Klasse</th><th>Raum-Code</th><th>Lehrer-Code</th><th>Spieler</th><th>Tipps</th><th>Erstellt am</th><th>Letzte Aktivität</th><th>Aktion</th></tr></thead>
           <tbody>${rooms.map((room) => {
             const expanded = expandedAdminRooms.has(room.roomCode);
+            const playerCount = Number(room.playerCount || 0);
+            const playerLimit = Number(room.playerLimit || 0);
+            const limitExceeded = playerLimit > 0 && playerCount > playerLimit;
             return `
-            <tr class="superadmin-room-row">
+            <tr class="superadmin-room-row${limitExceeded ? " is-over-capacity" : ""}">
               <td>${escapeAdminText(room.schoolName)}</td>
               <td>${escapeAdminText(room.className)}</td>
               <td><code>${escapeAdminText(room.roomCode)}</code></td>
               <td><code>${escapeAdminText(room.teacherCode || "-")}</code></td>
-              <td><button class="superadmin-player-toggle" type="button" data-toggle-players="${escapeAdminText(room.roomCode)}" aria-expanded="${expanded}">${expanded ? "Spieler ausblenden" : `${Number(room.playerCount || 0)} Spieler anzeigen`}</button></td>
+              <td><button class="superadmin-player-toggle" type="button" data-toggle-players="${escapeAdminText(room.roomCode)}" aria-expanded="${expanded}">${expanded ? "Spieler ausblenden" : `${playerCount} / ${playerLimit || "–"} Spieler`}</button>${limitExceeded ? '<small class="superadmin-capacity-warning">Limit überschritten</small>' : ""}</td>
               <td>${Number(room.pickCount || 0)}</td>
               <td>${escapeAdminText(formatAdminDate(room.createdAt))}</td>
               <td>${escapeAdminText(formatAdminDate(room.lastActivity))}</td>
