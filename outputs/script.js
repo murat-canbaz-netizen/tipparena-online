@@ -1209,21 +1209,33 @@ function renderLeaderboard() {
   const podium = ranked.slice(0, 3);
   const currentRank = ranked.findIndex((player) => player.current) + 1;
   const currentPlayer = ranked[currentRank - 1];
-  const topPlayer = ranked[0];
   const hottestPlayer = ranked
     .map((player) => ({ ...player, streak: exactStreak(player.picks) }))
     .sort((a, b) => b.streak - a.streak || b.points - a.points)[0];
   const biggestPositiveMovement = Math.max(0, ...ranked.map((player) => player.movement));
   const comebackPlayers = ranked.filter((player) => player.movement === biggestPositiveMovement && biggestPositiveMovement > 0);
   const comebackNames = comebackPlayers.map((player) => player.name).join(" & ");
-  const pointsToTop = currentPlayer ? Math.max(0, topPlayer.points - currentPlayer.points) : 0;
+  const nextOpponent = currentRank > 1 ? ranked[currentRank - 2] : null;
+  const pointsToNextOpponent = nextOpponent && currentPlayer
+    ? Math.max(0, nextOpponent.points - currentPlayer.points)
+    : 0;
+  const nextDuel = !currentPlayer
+    ? { headline: "Melde dich an", detail: "Dann siehst du dein nächstes Duell." }
+    : ranked.length === 1
+      ? { headline: "Noch kein Duell", detail: "Sobald andere mitspielen, startet die Jagd." }
+      : currentRank === 1
+        ? { headline: "Du wirst gejagt!", detail: "Verteidige deinen Spitzenplatz." }
+        : {
+            headline: `Du jagst ${nextOpponent.name}`,
+            detail: `Nur ${pointsToNextOpponent} ${pointsToNextOpponent === 1 ? "Punkt" : "Punkte"} Abstand`,
+          };
 
   leaderboard.innerHTML = `
     <div class="leaderboard-hype" aria-label="Tabellen-Statistiken">
       <article>
-        <span>Dein Ziel</span>
-        <strong>${currentRank ? `Platz ${currentRank}` : "Noch einsteigen"}</strong>
-        <small>${currentPlayer ? `${pointsToTop} Punkte bis Platz 1` : "Mit Spitznamen starten"}</small>
+        <span>Nächstes Duell</span>
+        <strong>${nextDuel.headline}</strong>
+        <small>${nextDuel.detail}</small>
       </article>
       <article>
         <span>Heißeste Serie</span>
