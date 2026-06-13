@@ -1215,9 +1215,11 @@ function renderLeaderboard() {
   const biggestPositiveMovement = Math.max(0, ...ranked.map((player) => player.movement));
   const comebackPlayers = ranked.filter((player) => player.movement === biggestPositiveMovement && biggestPositiveMovement > 0);
   const comebackNames = comebackPlayers.map((player) => player.name).join(" & ");
-  const nextOpponent = currentRank > 1 ? ranked[currentRank - 2] : null;
+  const nextOpponent = currentPlayer
+    ? ranked.slice(0, Math.max(0, currentRank - 1)).reverse().find((player) => player.points > currentPlayer.points)
+    : null;
   const pointsToNextOpponent = nextOpponent && currentPlayer
-    ? Math.max(0, nextOpponent.points - currentPlayer.points)
+    ? nextOpponent.points - currentPlayer.points
     : 0;
   const nextDuel = !currentPlayer
     ? { headline: "Melde dich an", detail: "Dann siehst du dein nächstes Duell." }
@@ -1225,6 +1227,8 @@ function renderLeaderboard() {
       ? { headline: "Noch kein Duell", detail: "Sobald andere mitspielen, startet die Jagd." }
       : currentRank === 1
         ? { headline: "Du wirst gejagt!", detail: "Verteidige deinen Spitzenplatz." }
+        : !nextOpponent
+          ? { headline: "Du bist ganz oben!", detail: "Niemand ist punktmäßig vor dir." }
         : {
             headline: `Du jagst ${nextOpponent.name}`,
             detail: `Nur ${pointsToNextOpponent} ${pointsToNextOpponent === 1 ? "Punkt" : "Punkte"} Abstand`,
