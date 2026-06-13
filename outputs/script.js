@@ -1237,7 +1237,8 @@ function renderLeaderboard() {
       ${podium
         .map(
           (player, index) => `
-            <article class="podium-card podium-${index + 1}">
+            <article class="podium-card podium-${index + 1} ${player.current ? "current-player" : ""}">
+              ${player.current ? '<span class="current-player-badge">DU</span>' : ""}
               <span class="podium-rank">${index === 0 ? "Champion" : `Platz ${index + 1}`}</span>
               <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
               <b>${player.points} Punkte</b>
@@ -1252,6 +1253,7 @@ function renderLeaderboard() {
     .map(
       (player, index) => `
         <article class="leader-row rank-${index + 1} ${player.current ? "current-player" : ""}">
+          ${player.current ? '<span class="current-player-badge">DU</span>' : ""}
           <span class="rank">Platz ${index + 1}</span>
           <div class="leader-player">
             <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>

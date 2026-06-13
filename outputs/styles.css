@@ -4748,3 +4748,57 @@ body {
   }
 }
 
+/* Make the signed-in child immediately recognizable in the leaderboard. */
+.leader-row.current-player,
+.podium-card.current-player {
+  position: relative;
+  border: 2px solid rgba(184, 255, 77, 0.92);
+  box-shadow:
+    0 0 0 4px rgba(184, 255, 77, 0.12),
+    0 0 30px rgba(184, 255, 77, 0.24),
+    0 20px 42px rgba(17, 24, 39, 0.18);
+}
+
+.leader-row.current-player {
+  background-color: rgba(232, 255, 204, 0.72);
+}
+
+.leader-row.current-player:not(.rank-1):not(.rank-2):not(.rank-3) {
+  background:
+    linear-gradient(105deg, rgba(232, 255, 204, 0.96), rgba(239, 248, 255, 0.96));
+}
+
+.current-player-badge {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  min-height: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: linear-gradient(135deg, #dfff9f, #9dea39);
+  color: #15210d;
+  box-shadow: 0 6px 16px rgba(88, 145, 27, 0.26);
+  font-size: 0.7rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+
+.podium-card.current-player .current-player-badge {
+  top: 10px;
+  right: 10px;
+}
+
+@media (max-width: 760px) {
+  .current-player-badge {
+    top: 6px;
+    right: 7px;
+  }
+}
+
