@@ -80,6 +80,7 @@ function renderMissingPicks(player) {
 function renderAdminPlayers(room) {
   const players = Array.isArray(room.players) ? room.players : [];
   if (!players.length) return '<p class="superadmin-player-empty">Noch keine Spieler in diesem Raum.</p>';
+  const matches = window.tipparenaMatchCatalog || [];
   return `
     <div class="superadmin-player-list">
       ${players.map((player) => {
@@ -99,6 +100,19 @@ function renderAdminPlayers(room) {
           <span><b>${Number(player.points || 0)}</b> Punkte</span>
           <p class="superadmin-pick-status">${escapeAdminText(statusText)}</p>
           ${renderMissingPicks(player)}
+          <details class="superadmin-admin-pick">
+            <summary>Tipp nachtragen</summary>
+            <form data-admin-pick="${escapeAdminText(player.id)}" data-room-code="${escapeAdminText(room.roomCode)}">
+              <label>Spiel<select name="matchId" required>
+                <option value="">Spiel auswählen</option>
+                ${matches.map((match) => `<option value="${escapeAdminText(match.id)}">Gruppe ${escapeAdminText(match.group)} · ${escapeAdminText(match.home)} – ${escapeAdminText(match.away)}</option>`).join("")}
+              </select></label>
+              <label>Heim<input name="homeScore" type="number" min="0" max="20" value="0" required /></label>
+              <label>Gast<input name="awayScore" type="number" min="0" max="20" value="0" required /></label>
+              <button type="submit">Tipp speichern</button>
+              <p role="status"></p>
+            </form>
+          </details>
         </article>`;
       }).join("")}
     </div>`;
@@ -289,6 +303,64 @@ superAdminForm?.addEventListener("submit", async (event) => {
 });
 
 superAdminSection?.addEventListener("submit", async (event) => {
+  const pickForm = event.target.closest("[data-admin-pick]");
+  if (pickForm) {
+    event.preventDefault();
+    const adminCode = storedAdminCode();
+    const message = pickForm.querySelector('[role="status"]');
+    if (!adminCode) {
+      message.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
+      return;
+    }
+    const button = pickForm.querySelector("button");
+    const originalLabel = button.textContent;
+    const values = new FormData(pickForm);
+    const payload = {
+      adminCode,
+      roomCode: pickForm.dataset.roomCode,
+      playerId: pickForm.dataset.adminPick,
+      matchId: values.get("matchId"),
+      homeScore: values.get("homeScore"),
+      awayScore: values.get("awayScore"),
+      overwrite: false,
+    };
+    button.disabled = true;
+    button.textContent = "Speichere...";
+    message.textContent = "Tipp wird gespeichert...";
+    try {
+      let response = await fetch("/api/admin-pick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      let data = await response.json().catch(() => ({}));
+      if (response.status === 409) {
+        if (!window.confirm(data.error || "Für dieses Kind gibt es bereits einen Tipp. Wirklich überschreiben?")) {
+          message.textContent = "Bestehender Tipp wurde nicht verändert.";
+          return;
+        }
+        response = await fetch("/api/admin-pick", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, overwrite: true }),
+        });
+        data = await response.json().catch(() => ({}));
+      }
+      if (!response.ok) {
+        if (response.status === 401) clearAdminCode();
+        throw new Error(data.error || "Tipp konnte nicht gespeichert werden.");
+      }
+      await loadAdminOverview(adminCode);
+      superAdminMessage.textContent = data.overwritten ? "Tipp überschrieben ✓" : "Tipp nachgetragen ✓";
+    } catch (error) {
+      message.textContent = error.message || "Tipp konnte nicht gespeichert werden.";
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+    return;
+  }
+
   const limitForm = event.target.closest("[data-room-limit]");
   if (limitForm) {
     event.preventDefault();

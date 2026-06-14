@@ -80,6 +80,7 @@ export async function onRequest(context) {
                   closed: now >= Date.parse(match.kickoff),
                 }));
               return {
+                id: player.id,
                 nickname: player.nickname,
                 avatar: player.avatar,
                 pickCount: playerPicks.length,
