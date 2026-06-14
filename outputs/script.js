@@ -507,9 +507,14 @@ async function syncRoom() {
   renderAll();
 }
 
-async function syncPicks() {
+async function syncPicks({ cacheBust = false, render = true } = {}) {
   if (!classState.code) return { synced: false, error: "Klassenraum fehlt." };
-  const data = await apiRequest("picks", {}, `/api/picks?room=${encodeURIComponent(classState.code)}`);
+  const cacheSuffix = cacheBust ? `&t=${Date.now()}` : "";
+  const data = await apiRequest(
+    "picks",
+    cacheBust ? { cache: "no-store" } : {},
+    `/api/picks?room=${encodeURIComponent(classState.code)}${cacheSuffix}`,
+  );
   if (!data || data.error) {
     return { synced: false, error: data?.error || "Serverstand konnte nicht geladen werden." };
   }
@@ -526,7 +531,7 @@ async function syncPicks() {
       userPicks[matchId] = pick;
     });
   }
-  renderAll();
+  if (render) renderAll();
   return { synced: true };
 }
 
@@ -709,26 +714,27 @@ async function saveRemotePick(matchId, pick) {
       status: data?.status,
       error: data?.status === 409
         ? data.error
-        : "Tipp konnte nicht gespeichert werden. Bitte noch einmal auf Speichern tippen.",
+        : "Speichern hat nicht geklappt. Bitte versuche es noch einmal.",
     };
   }
-  const syncResult = await syncPicks();
-  if (!syncResult.synced) {
-    return {
-      saved: false,
-      submitted: true,
-      error: "Tipp wurde gesendet, konnte aber nicht überprüft werden. Bitte kurz neu laden oder erneut prüfen.",
-    };
+  return { saved: true, verification: verifySavedPick(matchId, pick) };
+}
+
+function waitForPickVerification(delay) {
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+async function verifySavedPick(matchId, pick) {
+  const startedAt = Date.now();
+  for (const retryAt of [0, 800, 2000]) {
+    const delay = retryAt - (Date.now() - startedAt);
+    if (delay > 0) await waitForPickVerification(delay);
+    const syncResult = await syncPicks({ cacheBust: true, render: false });
+    if (!syncResult.synced) continue;
+    const verifiedPick = remotePicksForPlayer(classState.playerId)[matchId];
+    if (verifiedPick?.[0] === pick[0] && verifiedPick?.[1] === pick[1]) return true;
   }
-  const verifiedPick = remotePicksForPlayer(classState.playerId)[matchId];
-  if (!verifiedPick || verifiedPick[0] !== pick[0] || verifiedPick[1] !== pick[1]) {
-    return {
-      saved: false,
-      submitted: true,
-      error: "Tipp wurde gesendet, konnte aber nicht überprüft werden. Bitte kurz neu laden oder erneut prüfen.",
-    };
-  }
-  return { saved: true };
+  return false;
 }
 
 function showLockedMatchMessage(matchId) {
@@ -1027,7 +1033,7 @@ function renderMatchCard(match) {
   const saveLabel = locked
     ? isSaved ? "Gespeichert ✓" : "Nicht getippt"
     : isSaving
-      ? "Speichere..."
+      ? "Speichere deinen Tipp..."
       : pickSaveMessages[match.id]
         || (isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : hasUnsavedChanges ? "Noch nicht gespeichert – Tipp speichern" : "Tipp speichern");
   return `
@@ -1654,14 +1660,14 @@ matchList.addEventListener("click", (event) => {
     pendingPickSaves.add(matchId);
     delete pickSaveMessages[matchId];
     saveButton.disabled = true;
-    saveButton.textContent = "Speichere...";
+    saveButton.textContent = "Speichere deinen Tipp...";
     saveRemotePick(matchId, pickToSave).then((result) => {
       pendingPickSaves.delete(matchId);
       if (!result.saved) {
         saveButton.disabled = result.status === 409;
         pickSaveMessages[matchId] = result.status === 409
           ? result.error
-          : result.error || "Tipp konnte nicht gespeichert werden. Bitte noch einmal auf Speichern tippen.";
+          : result.error || "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
         saveButton.textContent = pickSaveMessages[matchId];
         return;
       }
@@ -1670,12 +1676,20 @@ matchList.addEventListener("click", (event) => {
       if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
         delete draftPicks[matchId];
       }
-      delete pickSaveMessages[matchId];
+      pickSaveMessages[matchId] = "Tipp gespeichert – wird gleich geprüft...";
       renderMatches();
       renderLeaderboard();
+      result.verification.then((verified) => {
+        if (!verified) {
+          console.warn("Der Tipp wurde gespeichert, die Nachprüfung konnte aber noch nicht abgeschlossen werden.");
+        }
+        delete pickSaveMessages[matchId];
+        renderMatches();
+        renderLeaderboard();
+      });
     }).catch(() => {
       pendingPickSaves.delete(matchId);
-      pickSaveMessages[matchId] = "Tipp konnte nicht gespeichert werden. Bitte noch einmal auf Speichern tippen.";
+      pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
       saveButton.disabled = false;
       saveButton.textContent = pickSaveMessages[matchId];
     });
