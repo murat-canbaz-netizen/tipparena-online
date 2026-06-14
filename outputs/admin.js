@@ -103,13 +103,13 @@ function renderAdminPlayers(room) {
           <details class="superadmin-admin-pick">
             <summary>Tipp nachtragen</summary>
             <form data-admin-pick="${escapeAdminText(player.id)}" data-room-code="${escapeAdminText(room.roomCode)}">
-              <label>Spiel<select name="matchId" required>
+              <label class="superadmin-admin-pick-match">Spiel<select name="matchId" required>
                 <option value="">Spiel auswählen</option>
                 ${matches.map((match) => `<option value="${escapeAdminText(match.id)}">Gruppe ${escapeAdminText(match.group)} · ${escapeAdminText(match.home)} – ${escapeAdminText(match.away)}</option>`).join("")}
               </select></label>
-              <label>Heim<input name="homeScore" type="number" min="0" max="20" value="0" required /></label>
-              <label>Gast<input name="awayScore" type="number" min="0" max="20" value="0" required /></label>
-              <button type="submit">Tipp speichern</button>
+              <label class="superadmin-admin-pick-score">Heim<input name="homeScore" type="number" min="0" max="20" value="0" required /></label>
+              <label class="superadmin-admin-pick-score">Auswärts<input name="awayScore" type="number" min="0" max="20" value="0" required /></label>
+              <button class="superadmin-admin-pick-save" type="submit">Tipp speichern</button>
               <p role="status"></p>
             </form>
           </details>
