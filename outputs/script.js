@@ -1077,8 +1077,8 @@ function movementMarkup(movement, rank, totalRanks) {
   if (rank === 1 && visibleMovement < 0) visibleMovement = 0;
   if (rank === totalRanks && visibleMovement > 0) visibleMovement = 0;
 
-  if (visibleMovement > 0) return `<span class="move up">↑ ${visibleMovement}</span>`;
-  if (visibleMovement < 0) return `<span class="move down">↓ ${Math.abs(visibleMovement)}</span>`;
+  if (visibleMovement > 0) return `<span class="move up">↑ +${visibleMovement}</span>`;
+  if (visibleMovement < 0) return `<span class="move down">↓ -${Math.abs(visibleMovement)}</span>`;
   return `<span class="move same">→ 0</span>`;
 }
 
@@ -1181,6 +1181,37 @@ function latestFinishedPickMarkup(player, match) {
   return `<small class="latest-finished-pick ${points === 3 ? "is-perfect" : ""}">${matchLabel} ${pick[0]}:${pick[1]} · +${points} Pkt.</small>`;
 }
 
+function leaderboardPlayerKey(player) {
+  return player.id || player.name;
+}
+
+function rankLeaderboardRows(rows, pointsForPlayer) {
+  return rows
+    .map((player, order) => ({ ...player, points: pointsForPlayer(player), leaderboardOrder: order }))
+    .sort((a, b) => {
+      if (a.empty && !b.empty) return 1;
+      if (!a.empty && b.empty) return -1;
+      return b.points - a.points || a.leaderboardOrder - b.leaderboardOrder;
+    });
+}
+
+function applyLastFinishedMatchMovement(ranked, rows, lastFinishedMatch) {
+  if (!lastFinishedMatch?.result) {
+    return ranked.map((player) => ({ ...player, movement: 0, movementMatchId: null }));
+  }
+  const previousRankByPlayer = new Map(
+    rankLeaderboardRows(
+      rows,
+      (player) => totalPoints(player.picks) - scorePick(player.picks?.[lastFinishedMatch.id], lastFinishedMatch.result),
+    ).map((player, index) => [leaderboardPlayerKey(player), index + 1]),
+  );
+  return ranked.map((player, index) => ({
+    ...player,
+    movement: (previousRankByPlayer.get(leaderboardPlayerKey(player)) || index + 1) - (index + 1),
+    movementMatchId: lastFinishedMatch.id,
+  }));
+}
+
 function renderLeaderboard() {
   const hasCurrentPlayer = Boolean(classState.joinedName);
   const hasClassRoom = Boolean(classState.code);
@@ -1214,13 +1245,12 @@ function renderLeaderboard() {
     seed += 1;
   }
 
-  const ranked = rows
-    .map((player) => ({ ...player, points: totalPoints(player.picks) }))
-    .sort((a, b) => {
-      if (a.empty && !b.empty) return 1;
-      if (!a.empty && b.empty) return -1;
-      return b.points - a.points;
-    });
+  const lastFinishedMatch = latestFinishedMatch();
+  const ranked = applyLastFinishedMatchMovement(
+    rankLeaderboardRows(rows, (player) => totalPoints(player.picks)),
+    rows,
+    lastFinishedMatch,
+  );
 
   if (!ranked.length) {
     leaderboard.innerHTML = `
@@ -1233,7 +1263,6 @@ function renderLeaderboard() {
   }
 
   const podium = ranked.slice(0, 3);
-  const lastFinishedMatch = latestFinishedMatch();
   const currentRank = ranked.findIndex((player) => player.current) + 1;
   const currentPlayer = ranked[currentRank - 1];
   const hottestPlayer = ranked
