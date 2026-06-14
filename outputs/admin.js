@@ -128,7 +128,14 @@ function renderSuperAdmin(data) {
               <td>${escapeAdminText(room.className)}</td>
               <td><code>${escapeAdminText(room.roomCode)}</code></td>
               <td><code>${escapeAdminText(room.teacherCode || "-")}</code></td>
-              <td><button class="superadmin-player-toggle" type="button" data-toggle-players="${escapeAdminText(room.roomCode)}" aria-expanded="${expanded}">${expanded ? "Spieler ausblenden" : `${playerCount} / ${playerLimit || "–"} Spieler`}</button>${limitExceeded ? '<small class="superadmin-capacity-warning">Limit überschritten</small>' : ""}</td>
+              <td>
+                <button class="superadmin-player-toggle" type="button" data-toggle-players="${escapeAdminText(room.roomCode)}" aria-expanded="${expanded}">${expanded ? "Spieler ausblenden" : `${playerCount} / ${playerLimit || "–"} Spieler`}</button>
+                ${limitExceeded ? '<small class="superadmin-capacity-warning">Limit überschritten</small>' : ""}
+                <form class="superadmin-limit-form" data-room-limit="${escapeAdminText(room.roomCode)}">
+                  <label>Limit ändern<input name="playerLimit" type="number" min="${Math.max(1, playerCount)}" max="35" value="${playerLimit || Math.max(1, playerCount)}" required /></label>
+                  <button type="submit">Speichern</button>
+                </form>
+              </td>
               <td>${Number(room.pickCount || 0)}</td>
               <td>${escapeAdminText(formatAdminDate(room.createdAt))}</td>
               <td>${escapeAdminText(formatAdminDate(room.lastActivity))}</td>
@@ -282,6 +289,41 @@ superAdminForm?.addEventListener("submit", async (event) => {
 });
 
 superAdminSection?.addEventListener("submit", async (event) => {
+  const limitForm = event.target.closest("[data-room-limit]");
+  if (limitForm) {
+    event.preventDefault();
+    const adminCode = storedAdminCode();
+    if (!adminCode) {
+      superAdminMessage.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
+      return;
+    }
+    const button = limitForm.querySelector("button");
+    const originalLabel = button.textContent;
+    const playerLimit = Number(new FormData(limitForm).get("playerLimit"));
+    button.disabled = true;
+    button.textContent = "Speichere...";
+    superAdminMessage.textContent = "Schülerlimit wird gespeichert...";
+    try {
+      const response = await fetch("/api/admin-room-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminCode, roomCode: limitForm.dataset.roomLimit, playerLimit }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) clearAdminCode();
+        throw new Error(data.error || "Schülerlimit konnte nicht gespeichert werden.");
+      }
+      await loadAdminOverview(adminCode);
+      superAdminMessage.textContent = `Schülerlimit auf ${data.playerLimit} gesetzt ✓`;
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+      superAdminMessage.textContent = error.message || "Schülerlimit konnte nicht gespeichert werden.";
+    }
+    return;
+  }
+
   const form = event.target.closest("[data-admin-result]");
   if (!form) return;
   event.preventDefault();

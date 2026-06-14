@@ -138,6 +138,44 @@ body.is-superadmin .superadmin-section {
   background: rgba(255, 247, 230, 0.58);
 }
 
+.superadmin-limit-form {
+  display: flex;
+  gap: 5px;
+  align-items: end;
+  margin-top: 7px;
+}
+
+.superadmin-limit-form label {
+  display: grid;
+  gap: 2px;
+  color: #657184;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.superadmin-limit-form input {
+  width: 62px;
+  min-height: 32px;
+  border: 1px solid #cfd8e5;
+  border-radius: 7px;
+  padding: 4px 7px;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.superadmin-limit-form button {
+  min-height: 32px;
+  border: 1px solid #8fb4df;
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: #eaf3ff;
+  color: #2f5f9d;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .superadmin-player-detail td {
   padding: 18px;
   background: #f4f7fb;
