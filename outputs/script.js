@@ -10,7 +10,43 @@ const classState = {
 };
 
 const storageKey = "tipparena-session";
+const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
+const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
+const debugState = {
+  scriptVersion: "89",
+  sessionSource: "keine",
+  sessionAvailable: false,
+  loadedPickCount: 0,
+  loadedMatchIds: [],
+  lastSavedMatchId: "-",
+  lastSaveVerification: "noch nicht gespeichert",
+  lastPicksGetAt: "-",
+};
+
+function updateDebugPanel() {
+  if (!debugMode) return;
+  let panel = document.querySelector("#tipparenaDebugPanel");
+  if (!panel) {
+    panel = document.createElement("aside");
+    panel.id = "tipparenaDebugPanel";
+    panel.style.cssText = "position:fixed;z-index:9999;right:10px;bottom:10px;max-width:min(420px,calc(100vw - 20px));max-height:45vh;overflow:auto;padding:12px;border:1px solid #8fa3bb;border-radius:12px;background:#f7faff;color:#172033;font:12px/1.45 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.22);white-space:pre-wrap";
+    document.body.append(panel);
+  }
+  panel.textContent = [
+    "TippArena Diagnose",
+    `Script-Version: v=${debugState.scriptVersion}`,
+    `Raumcode: ${classState.code || "-"}`,
+    `Spitzname: ${classState.joinedName || "-"}`,
+    `playerId: ${classState.playerId || "-"}`,
+    `Session vorhanden: ${debugState.sessionAvailable ? "ja" : "nein"} (${debugState.sessionSource})`,
+    `Geladene Tipps: ${debugState.loadedPickCount}`,
+    `Geladene matchIds: ${debugState.loadedMatchIds.join(", ") || "-"}`,
+    `Zuletzt gespeichert: ${debugState.lastSavedMatchId}`,
+    `Letzte Speicherprüfung: ${debugState.lastSaveVerification}`,
+    `Letzter GET /api/picks: ${debugState.lastPicksGetAt}`,
+  ].join("\n");
+}
 
 const flags = {
   Mexiko: "🇲🇽",
@@ -515,6 +551,8 @@ async function syncPicks({ render = true, replaceUserPicks = true } = {}) {
     `/api/picks?room=${encodeURIComponent(classState.code)}&t=${Date.now()}`,
   );
   if (!data || data.error) {
+    debugState.lastPicksGetAt = `${new Date().toLocaleTimeString("de-DE")} (Fehler)`;
+    updateDebugPanel();
     return { synced: false, error: data?.error || "Serverstand konnte nicht geladen werden." };
   }
   remoteState.players = data.players || remoteState.players;
@@ -526,6 +564,8 @@ async function syncPicks({ render = true, replaceUserPicks = true } = {}) {
 
   if (classState.playerId) {
     const savedPicks = remotePicksForPlayer(classState.playerId);
+    debugState.loadedPickCount = Object.keys(savedPicks).length;
+    debugState.loadedMatchIds = Object.keys(savedPicks);
     if (replaceUserPicks) {
       Object.keys(userPicks).forEach((matchId) => delete userPicks[matchId]);
       Object.entries(savedPicks).forEach(([matchId, pick]) => {
@@ -533,6 +573,8 @@ async function syncPicks({ render = true, replaceUserPicks = true } = {}) {
       });
     }
   }
+  debugState.lastPicksGetAt = new Date().toLocaleTimeString("de-DE");
+  updateDebugPanel();
   if (render) renderAll();
   return { synced: true };
 }
@@ -818,9 +860,35 @@ function rememberSession() {
         avatar: classState.avatar,
       }),
     );
+    window.name = `${windowSessionPrefix}${JSON.stringify({
+      code: classState.code,
+      className: classState.className,
+      school: classState.school,
+      nickname: classState.joinedName,
+      playerId: classState.playerId,
+      avatar: classState.avatar,
+    })}`;
+    debugState.sessionAvailable = true;
+    debugState.sessionSource = "sessionStorage + Tab-Fallback";
+    updateDebugPanel();
     return true;
   } catch {
-    return false;
+    try {
+      window.name = `${windowSessionPrefix}${JSON.stringify({
+        code: classState.code,
+        className: classState.className,
+        school: classState.school,
+        nickname: classState.joinedName,
+        playerId: classState.playerId,
+        avatar: classState.avatar,
+      })}`;
+      debugState.sessionAvailable = true;
+      debugState.sessionSource = "Tab-Fallback";
+      updateDebugPanel();
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -856,14 +924,32 @@ function restoreSession() {
   try {
     saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
   } catch {
+    saved = null;
+  }
+  if (saved?.code === classState.code) {
+    debugState.sessionSource = "sessionStorage";
+  } else if (window.name.startsWith(windowSessionPrefix)) {
+    try {
+      const windowSaved = JSON.parse(window.name.slice(windowSessionPrefix.length));
+      saved = windowSaved?.code === classState.code ? windowSaved : null;
+      if (saved) debugState.sessionSource = "Tab-Fallback";
+    } catch {
+      saved = null;
+    }
+  }
+  if (!saved || saved.code !== classState.code) {
+    debugState.sessionAvailable = false;
+    debugState.sessionSource = "keine";
+    updateDebugPanel();
     return false;
   }
-  if (!saved || saved.code !== classState.code) return;
   classState.school = saved.school || classState.school;
   classState.className = saved.className || classState.className;
   classState.joinedName = saved.nickname || "";
   classState.playerId = saved.playerId || "";
   classState.avatar = saved.avatar || classState.avatar;
+  debugState.sessionAvailable = Boolean(classState.playerId);
+  updateDebugPanel();
   return Boolean(classState.playerId);
 }
 
@@ -1426,6 +1512,7 @@ function renderAll() {
       ? `${avatarMarkup(classState.avatar)}<span>${classState.joinedName}</span>`
       : "Live-Sync aktiv";
   }
+  updateDebugPanel();
 }
 
 async function joinArena(nickname, avatar, messageTarget) {
@@ -1718,16 +1805,23 @@ matchList.addEventListener("click", (event) => {
     saveButton.disabled = true;
     saveButton.textContent = "Speichere deinen Tipp...";
     saveRemotePick(matchId, pickToSave).then(async (result) => {
+      debugState.lastSavedMatchId = matchId;
       if (result.submitted && result.verification) {
+        debugState.lastSaveVerification = "Nachprüfung läuft";
+        updateDebugPanel();
         pickSaveMessages[matchId] = "Speichern wird geprüft...";
         renderMatches();
         const verified = await result.verification;
         pendingPickSaves.delete(matchId);
         if (!verified) {
+          debugState.lastSaveVerification = "nicht bestätigt";
+          updateDebugPanel();
           pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
           renderMatches();
           return;
         }
+        debugState.lastSaveVerification = "Server bestätigt";
+        updateDebugPanel();
         userPicks[matchId] = pickToSave;
         const currentDraft = draftPicks[matchId];
         if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
@@ -1741,6 +1835,8 @@ matchList.addEventListener("click", (event) => {
 
       pendingPickSaves.delete(matchId);
       if (!result.saved) {
+        debugState.lastSaveVerification = "Speicherfehler";
+        updateDebugPanel();
         saveButton.disabled = result.status === 409;
         pickSaveMessages[matchId] = result.status === 409
           ? result.error
@@ -1748,6 +1844,8 @@ matchList.addEventListener("click", (event) => {
         saveButton.textContent = pickSaveMessages[matchId];
         return;
       }
+      debugState.lastSaveVerification = "Server bestätigt";
+      updateDebugPanel();
       userPicks[matchId] = pickToSave;
       const currentDraft = draftPicks[matchId];
       if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
@@ -1758,6 +1856,9 @@ matchList.addEventListener("click", (event) => {
       renderLeaderboard();
       syncPicks({ render: false });
     }).catch(() => {
+      debugState.lastSavedMatchId = matchId;
+      debugState.lastSaveVerification = "Netzwerk-/Speicherfehler";
+      updateDebugPanel();
       pendingPickSaves.delete(matchId);
       pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
       saveButton.disabled = false;

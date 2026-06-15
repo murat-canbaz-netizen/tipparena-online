@@ -1,5 +1,16 @@
 import { cleanString, jsonResponse, supabase } from "../lib/shared.js";
 
+function normalizeNickname(value) {
+  return cleanString(value)
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nicknameKey(value) {
+  return normalizeNickname(value).toLocaleLowerCase("de-DE");
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
@@ -8,7 +19,7 @@ export async function onRequest(context) {
   try {
     const body = await request.json().catch(() => ({}));
     const roomCode = cleanString(body.roomCode).toUpperCase();
-    const nickname = cleanString(body.nickname);
+    const nickname = normalizeNickname(body.nickname);
     if (!roomCode) return jsonResponse(400, { error: "Klassencode fehlt." });
     if (!nickname) return jsonResponse(400, { error: "Spitzname fehlt." });
 
@@ -16,18 +27,21 @@ export async function onRequest(context) {
     const room = rooms[0];
     if (!room) return jsonResponse(404, { error: "Dieser Klassenraum wurde nicht gefunden." });
 
-    const existing = await supabase(
-      env,
-      `players?room_code=eq.${encodeURIComponent(roomCode)}&nickname=ilike.${encodeURIComponent(nickname)}&limit=1`,
-    );
-    if (existing.length) {
-      return jsonResponse(200, { room, player: existing[0], existing: true });
-    }
-
     const playersInRoom = await supabase(
       env,
-      `players?room_code=eq.${encodeURIComponent(roomCode)}&select=id`,
+      `players?room_code=eq.${encodeURIComponent(roomCode)}&select=id,room_code,nickname,avatar,created_at&order=created_at.asc`,
     );
+    const existing = playersInRoom.find((player) => nicknameKey(player.nickname) === nicknameKey(nickname));
+    if (existing) {
+      console.info("Spieler-Wiederanmeldung", {
+        roomCode,
+        nicknameNormalized: nicknameKey(nickname),
+        playerId: existing.id,
+        existing: true,
+      });
+      return jsonResponse(200, { room, player: existing, existing: true });
+    }
+
     if (playersInRoom.length >= Number(room.student_count)) {
       return jsonResponse(409, { error: "Der Raum ist voll. Bitte wende dich an deine Lehrkraft." });
     }
@@ -44,8 +58,15 @@ export async function onRequest(context) {
       body: JSON.stringify(payload),
     });
 
+    console.info("Spieler erstellt", {
+      roomCode,
+      nicknameNormalized: nicknameKey(nickname),
+      playerId: players[0]?.id || null,
+      existing: false,
+    });
     return jsonResponse(200, { room, player: players[0], existing: false });
   } catch (error) {
+    console.error("Spieler-Anmeldung fehlgeschlagen", { error: error.message });
     return jsonResponse(500, { error: error.message });
   }
 }

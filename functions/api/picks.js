@@ -35,6 +35,12 @@ export async function onRequest(context) {
           `leaderboard_snapshots?room_code=eq.${encodedRoom}&select=snapshot&limit=1`,
         ),
       ]);
+      console.info("Tipps geladen", {
+        roomCode: room,
+        playerCount: players.length,
+        pickCount: picks.length,
+        matchIds: [...new Set(picks.map((pick) => pick.match_id))],
+      });
       return noStoreJson(200, { players, picks, leaderboard: snapshots[0]?.snapshot || [] });
     }
 
@@ -90,13 +96,30 @@ export async function onRequest(context) {
           && Number(entry.away_score) === expected.away_score
         )));
       if (!allSaved) {
+        console.error("Tipp-Speicherung nicht bestätigt", {
+          roomCode,
+          playerId,
+          requestedMatchIds: payload.map((entry) => entry.match_id),
+          savedCount: Array.isArray(saved) ? saved.length : null,
+        });
         return noStoreJson(500, { error: "Der Tipp konnte nicht sicher bestätigt werden." });
       }
+      console.info("Tipp gespeichert", {
+        roomCode,
+        playerId,
+        picks: saved.map((entry) => ({
+          matchId: entry.match_id,
+          homeScore: Number(entry.home_score),
+          awayScore: Number(entry.away_score),
+        })),
+        savedCount: saved.length,
+      });
       return noStoreJson(200, { picks: saved });
     }
 
     return noStoreJson(405, { error: "Methode nicht erlaubt." });
   } catch (error) {
+    console.error("Tipp-Anfrage fehlgeschlagen", { error: error.message });
     return noStoreJson(500, { error: error.message });
   }
 }
