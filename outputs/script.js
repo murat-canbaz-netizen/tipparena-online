@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "89",
+  scriptVersion: "90",
   sessionSource: "keine",
   sessionAvailable: false,
   loadedPickCount: 0,
@@ -22,6 +22,7 @@ const debugState = {
   lastSavedMatchId: "-",
   lastSaveVerification: "noch nicht gespeichert",
   lastPicksGetAt: "-",
+  matchStates: [],
 };
 
 function updateDebugPanel() {
@@ -45,6 +46,7 @@ function updateDebugPanel() {
     `Zuletzt gespeichert: ${debugState.lastSavedMatchId}`,
     `Letzte Speicherprüfung: ${debugState.lastSaveVerification}`,
     `Letzter GET /api/picks: ${debugState.lastPicksGetAt}`,
+    ...(debugState.matchStates.length ? ["", "Aktuelle Spielkarten:", ...debugState.matchStates] : []),
   ].join("\n");
 }
 
@@ -350,6 +352,7 @@ const demoNames = [
 
 const userPicks = {};
 const draftPicks = {};
+const locallyConfirmedPicks = {};
 const pendingPickSaves = new Set();
 const pickSaveMessages = {};
 const exactCelebrationStorageKey = "tipparenaExactCelebrations";
@@ -368,6 +371,39 @@ const remoteState = {
 let liveResultsTimer = null;
 let liveResultsRequestPending = false;
 let lastVisibleResultsRefresh = 0;
+
+function normalizedMatchId(matchId) {
+  return String(matchId || "").trim().toLowerCase();
+}
+
+function normalizedPick(pick) {
+  if (!Array.isArray(pick) || pick.length < 2) return null;
+  return [
+    Math.max(0, Math.min(20, Number(pick[0]) || 0)),
+    Math.max(0, Math.min(20, Number(pick[1]) || 0)),
+  ];
+}
+
+function samePick(left, right) {
+  return Array.isArray(left) && Array.isArray(right) && left[0] === right[0] && left[1] === right[1];
+}
+
+function setUserPick(matchId, pick, { locallyConfirmed = false } = {}) {
+  const key = normalizedMatchId(matchId);
+  const value = normalizedPick(pick);
+  if (!key || !value) return;
+  userPicks[key] = value;
+  if (locallyConfirmed) {
+    locallyConfirmedPicks[key] = { pick: [...value], confirmedAt: Date.now() };
+  }
+}
+
+function setDraftPick(matchId, pick) {
+  const key = normalizedMatchId(matchId);
+  const value = normalizedPick(pick);
+  if (!key || !value) return;
+  draftPicks[key] = value;
+}
 
 const heroJoinForm = document.querySelector("#heroJoinForm");
 const teacherLinkForm = document.querySelector("#teacherLinkForm");
@@ -521,7 +557,9 @@ function applyRoom(room) {
 function remotePicksForPlayer(playerId) {
   const picks = {};
   (remoteState.picksByPlayer[playerId] || []).forEach((pick) => {
-    picks[pick.match_id] = [Number(pick.home_score), Number(pick.away_score)];
+    const matchId = normalizedMatchId(pick.match_id);
+    const value = normalizedPick([pick.home_score, pick.away_score]);
+    if (matchId && value) picks[matchId] = value;
   });
   return picks;
 }
@@ -569,7 +607,17 @@ async function syncPicks({ render = true, replaceUserPicks = true } = {}) {
     if (replaceUserPicks) {
       Object.keys(userPicks).forEach((matchId) => delete userPicks[matchId]);
       Object.entries(savedPicks).forEach(([matchId, pick]) => {
-        userPicks[matchId] = pick;
+        const localPick = locallyConfirmedPicks[matchId]?.pick;
+        if (localPick && !samePick(localPick, pick)) {
+          userPicks[matchId] = [...localPick];
+          return;
+        }
+        userPicks[matchId] = [...pick];
+      });
+      Object.entries(locallyConfirmedPicks).forEach(([matchId, entry]) => {
+        if (!userPicks[matchId]) {
+          userPicks[matchId] = [...entry.pick];
+        }
       });
     }
   }
@@ -731,11 +779,13 @@ async function createRemotePlayer(nickname, avatar) {
 }
 
 async function saveRemotePick(matchId, pick) {
+  const key = normalizedMatchId(matchId);
+  const value = normalizedPick(pick);
   if (!classState.code || !classState.playerId) {
     return { saved: false, error: "Online-Speicherung nicht erreichbar." };
   }
-  const match = matches.find((entry) => entry.id === matchId);
-  if (!match || isMatchClosed(match) || !pick) {
+  const match = matches.find((entry) => normalizedMatchId(entry.id) === key);
+  if (!match || isMatchClosed(match) || !value) {
     return { saved: false, status: 409, error: "Dieses Spiel hat bereits begonnen. Dein Tipp wurde nicht gespeichert." };
   }
   const data = await apiRequest(
@@ -746,9 +796,9 @@ async function saveRemotePick(matchId, pick) {
       body: JSON.stringify({
         roomCode: classState.code,
         playerId: classState.playerId,
-        matchId,
-        homeScore: pick[0],
-        awayScore: pick[1],
+        matchId: key,
+        homeScore: value[0],
+        awayScore: value[1],
       }),
     },
     "/api/picks",
@@ -763,14 +813,14 @@ async function saveRemotePick(matchId, pick) {
     };
   }
   const confirmedPick = data.picks.find((savedPick) => (
-    String(savedPick.match_id || savedPick.matchId || "").toLowerCase() === matchId.toLowerCase()
-    && Number(savedPick.home_score ?? savedPick.homeScore) === pick[0]
-    && Number(savedPick.away_score ?? savedPick.awayScore) === pick[1]
+    normalizedMatchId(savedPick.match_id || savedPick.matchId) === key
+    && Number(savedPick.home_score ?? savedPick.homeScore) === value[0]
+    && Number(savedPick.away_score ?? savedPick.awayScore) === value[1]
     && (!savedPick.player_id || String(savedPick.player_id) === String(classState.playerId))
   ));
   return confirmedPick
     ? { saved: true, confirmedByPost: true }
-    : { saved: false, submitted: true, verification: verifySavedPick(matchId, pick) };
+    : { saved: false, submitted: true, verification: verifySavedPick(key, value) };
 }
 
 function waitForPickVerification(delay) {
@@ -778,14 +828,17 @@ function waitForPickVerification(delay) {
 }
 
 async function verifySavedPick(matchId, pick) {
+  const key = normalizedMatchId(matchId);
+  const value = normalizedPick(pick);
+  if (!key || !value) return false;
   const startedAt = Date.now();
   for (const retryAt of [0, 800, 2000]) {
     const delay = retryAt - (Date.now() - startedAt);
     if (delay > 0) await waitForPickVerification(delay);
     const syncResult = await syncPicks({ render: false, replaceUserPicks: false });
     if (!syncResult.synced) continue;
-    const verifiedPick = remotePicksForPlayer(classState.playerId)[matchId];
-    if (verifiedPick?.[0] === pick[0] && verifiedPick?.[1] === pick[1]) return true;
+    const verifiedPick = remotePicksForPlayer(classState.playerId)[key];
+    if (samePick(verifiedPick, value)) return true;
   }
   return false;
 }
@@ -1106,6 +1159,13 @@ function renderGroupTabs() {
 function renderMatches() {
   const group = classState.activeGroup;
   const groupMatches = matches.filter((match) => match.group === group);
+  debugState.matchStates = groupMatches.map((match) => {
+    const matchId = normalizedMatchId(match.id);
+    const draft = draftPicks[matchId];
+    const saved = userPicks[matchId];
+    const message = pickSaveMessages[matchId] || "-";
+    return `${matchId}: Draft ${draft ? draft.join(":") : "-"} | userPicks ${saved ? saved.join(":") : "-"} | Status ${message}`;
+  });
   const groupFlags = [...new Set(groupMatches.flatMap((match) => [match.home, match.away]))]
     .map((team) => `<span class="flag mini">${flagMarkup(team, false)}</span>`)
     .join("");
@@ -1124,15 +1184,18 @@ function renderMatches() {
     </section>
   `;
   updateCountdowns();
+  updateDebugPanel();
 }
 
 function renderMatchCard(match) {
-  const savedPick = userPicks[match.id];
-  const hasDraft = Object.prototype.hasOwnProperty.call(draftPicks, match.id);
-  const pick = hasDraft ? draftPicks[match.id] : savedPick || [0, 0];
+  const matchId = normalizedMatchId(match.id);
+  const savedPick = userPicks[matchId];
+  const draftPick = draftPicks[matchId];
+  const hasDraft = Object.prototype.hasOwnProperty.call(draftPicks, matchId);
+  const pick = hasDraft ? draftPick : savedPick || [0, 0];
   const isSaved = Boolean(savedPick);
-  const hasUnsavedChanges = hasDraft;
-  const isSaving = pendingPickSaves.has(match.id);
+  const hasUnsavedChanges = hasDraft && (!savedPick || !samePick(draftPick, savedPick));
+  const isSaving = pendingPickSaves.has(matchId);
   const points = scorePick(savedPick, match.result);
   const locked = isMatchClosed(match);
   const pointClass = match.result ? `points-${points}` : "";
@@ -1147,7 +1210,7 @@ function renderMatchCard(match) {
     ? isSaved ? "Gespeichert ✓" : "Nicht getippt"
     : isSaving
       ? "Speichere deinen Tipp..."
-      : pickSaveMessages[match.id]
+      : pickSaveMessages[matchId]
         || (isSaved && !hasUnsavedChanges ? "Gespeichert ✓" : hasUnsavedChanges ? "Noch nicht gespeichert – Tipp speichern" : "Tipp speichern");
   return `
     <article class="match-card ${match.status} ${locked ? "locked" : ""} ${pointClass} ${newExactSuccess ? "new-exact-success" : ""}" data-match-card="${match.id}">
@@ -1540,6 +1603,7 @@ async function joinArena(nickname, avatar, messageTarget) {
   rememberSession();
   Object.keys(userPicks).forEach((matchId) => delete userPicks[matchId]);
   Object.keys(draftPicks).forEach((matchId) => delete draftPicks[matchId]);
+  Object.keys(locallyConfirmedPicks).forEach((matchId) => delete locallyConfirmedPicks[matchId]);
   await syncPicks();
   messageTarget.textContent = player.existing ? `${classState.joinedName} ist wieder drin.` : `${classState.joinedName} ist drin.`;
   messageTarget.style.color = "#b8ff4d";
@@ -1763,8 +1827,8 @@ groupTabs.addEventListener("click", (event) => {
 matchList.addEventListener("input", (event) => {
   const field = event.target;
   if (!field.dataset.match) return;
-  const matchId = field.dataset.match;
-  const match = matches.find((entry) => entry.id === matchId);
+  const matchId = normalizedMatchId(field.dataset.match);
+  const match = matches.find((entry) => normalizedMatchId(entry.id) === matchId);
   if (!match || isMatchClosed(match)) {
     showLockedMatchMessage(matchId);
     renderMatches();
@@ -1773,7 +1837,7 @@ matchList.addEventListener("input", (event) => {
   const side = Number(field.dataset.side);
   field.value = field.value.replace(/\D/g, "").slice(0, 2);
   const value = field.value === "" ? 0 : Math.max(0, Math.min(20, Number(field.value)));
-  draftPicks[matchId] = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
+  setDraftPick(matchId, draftPicks[matchId] || userPicks[matchId] || [0, 0]);
   draftPicks[matchId][side] = value;
   delete pickSaveMessages[matchId];
   const saveButton = matchList.querySelector(`[data-save-pick="${matchId}"]`);
@@ -1791,15 +1855,15 @@ matchList.addEventListener("focusout", (event) => {
 matchList.addEventListener("click", (event) => {
   const saveButton = event.target.closest("[data-save-pick]");
   if (saveButton && !saveButton.disabled) {
-    const matchId = saveButton.dataset.savePick;
+    const matchId = normalizedMatchId(saveButton.dataset.savePick);
     if (pendingPickSaves.has(matchId)) return;
-    const match = matches.find((entry) => entry.id === matchId);
+    const match = matches.find((entry) => normalizedMatchId(entry.id) === matchId);
     if (!match || isMatchClosed(match)) {
       showLockedMatchMessage(matchId);
       return;
     }
-    const pickToSave = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
-    draftPicks[matchId] = [...pickToSave];
+    const pickToSave = normalizedPick(draftPicks[matchId] || userPicks[matchId] || [0, 0]);
+    setDraftPick(matchId, pickToSave);
     pendingPickSaves.add(matchId);
     delete pickSaveMessages[matchId];
     saveButton.disabled = true;
@@ -1822,9 +1886,9 @@ matchList.addEventListener("click", (event) => {
         }
         debugState.lastSaveVerification = "Server bestätigt";
         updateDebugPanel();
-        userPicks[matchId] = pickToSave;
+        setUserPick(matchId, pickToSave, { locallyConfirmed: true });
         const currentDraft = draftPicks[matchId];
-        if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
+        if (samePick(currentDraft, pickToSave)) {
           delete draftPicks[matchId];
         }
         delete pickSaveMessages[matchId];
@@ -1846,9 +1910,9 @@ matchList.addEventListener("click", (event) => {
       }
       debugState.lastSaveVerification = "Server bestätigt";
       updateDebugPanel();
-      userPicks[matchId] = pickToSave;
+      setUserPick(matchId, pickToSave, { locallyConfirmed: true });
       const currentDraft = draftPicks[matchId];
-      if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
+      if (samePick(currentDraft, pickToSave)) {
         delete draftPicks[matchId];
       }
       delete pickSaveMessages[matchId];
@@ -1869,15 +1933,15 @@ matchList.addEventListener("click", (event) => {
 
   const button = event.target.closest(".score-step");
   if (!button || button.disabled) return;
-  const matchId = button.dataset.match;
-  const match = matches.find((entry) => entry.id === matchId);
+  const matchId = normalizedMatchId(button.dataset.match);
+  const match = matches.find((entry) => normalizedMatchId(entry.id) === matchId);
   if (!match || isMatchClosed(match)) {
     showLockedMatchMessage(matchId);
     return;
   }
   const side = Number(button.dataset.side);
   const step = Number(button.dataset.step);
-  draftPicks[matchId] = [...(draftPicks[matchId] || userPicks[matchId] || [0, 0])];
+  setDraftPick(matchId, draftPicks[matchId] || userPicks[matchId] || [0, 0]);
   draftPicks[matchId][side] = Math.max(0, Math.min(20, Number(draftPicks[matchId][side] || 0) + step));
   delete pickSaveMessages[matchId];
   renderMatches();
