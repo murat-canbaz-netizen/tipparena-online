@@ -507,13 +507,12 @@ async function syncRoom() {
   renderAll();
 }
 
-async function syncPicks({ cacheBust = false, render = true } = {}) {
+async function syncPicks({ render = true, replaceUserPicks = true } = {}) {
   if (!classState.code) return { synced: false, error: "Klassenraum fehlt." };
-  const cacheSuffix = cacheBust ? `&t=${Date.now()}` : "";
   const data = await apiRequest(
     "picks",
-    cacheBust ? { cache: "no-store" } : {},
-    `/api/picks?room=${encodeURIComponent(classState.code)}${cacheSuffix}`,
+    { cache: "no-store" },
+    `/api/picks?room=${encodeURIComponent(classState.code)}&t=${Date.now()}`,
   );
   if (!data || data.error) {
     return { synced: false, error: data?.error || "Serverstand konnte nicht geladen werden." };
@@ -527,9 +526,12 @@ async function syncPicks({ cacheBust = false, render = true } = {}) {
 
   if (classState.playerId) {
     const savedPicks = remotePicksForPlayer(classState.playerId);
-    Object.entries(savedPicks).forEach(([matchId, pick]) => {
-      userPicks[matchId] = pick;
-    });
+    if (replaceUserPicks) {
+      Object.keys(userPicks).forEach((matchId) => delete userPicks[matchId]);
+      Object.entries(savedPicks).forEach(([matchId, pick]) => {
+        userPicks[matchId] = pick;
+      });
+    }
   }
   if (render) renderAll();
   return { synced: true };
@@ -698,6 +700,7 @@ async function saveRemotePick(matchId, pick) {
     "picks",
     {
       method: "POST",
+      cache: "no-store",
       body: JSON.stringify({
         roomCode: classState.code,
         playerId: classState.playerId,
@@ -708,7 +711,7 @@ async function saveRemotePick(matchId, pick) {
     },
     "/api/picks",
   );
-  if (!data?.picks) {
+  if (!Array.isArray(data?.picks)) {
     return {
       saved: false,
       status: data?.status,
@@ -717,7 +720,15 @@ async function saveRemotePick(matchId, pick) {
         : "Speichern hat nicht geklappt. Bitte versuche es noch einmal.",
     };
   }
-  return { saved: true, verification: verifySavedPick(matchId, pick) };
+  const confirmedPick = data.picks.find((savedPick) => (
+    String(savedPick.match_id || savedPick.matchId || "").toLowerCase() === matchId.toLowerCase()
+    && Number(savedPick.home_score ?? savedPick.homeScore) === pick[0]
+    && Number(savedPick.away_score ?? savedPick.awayScore) === pick[1]
+    && (!savedPick.player_id || String(savedPick.player_id) === String(classState.playerId))
+  ));
+  return confirmedPick
+    ? { saved: true, confirmedByPost: true }
+    : { saved: false, submitted: true, verification: verifySavedPick(matchId, pick) };
 }
 
 function waitForPickVerification(delay) {
@@ -729,7 +740,7 @@ async function verifySavedPick(matchId, pick) {
   for (const retryAt of [0, 800, 2000]) {
     const delay = retryAt - (Date.now() - startedAt);
     if (delay > 0) await waitForPickVerification(delay);
-    const syncResult = await syncPicks({ cacheBust: true, render: false });
+    const syncResult = await syncPicks({ render: false, replaceUserPicks: false });
     if (!syncResult.synced) continue;
     const verifiedPick = remotePicksForPlayer(classState.playerId)[matchId];
     if (verifiedPick?.[0] === pick[0] && verifiedPick?.[1] === pick[1]) return true;
@@ -756,6 +767,7 @@ async function saveAllRemotePicks() {
     "picks",
     {
       method: "POST",
+      cache: "no-store",
       body: JSON.stringify({
         roomCode: classState.code,
         playerId: classState.playerId,
@@ -793,18 +805,23 @@ function updateClassDisplay() {
 }
 
 function rememberSession() {
-  if (!classState.code || !classState.joinedName) return;
-  sessionStorage.setItem(
-    storageKey,
-    JSON.stringify({
-      code: classState.code,
-      className: classState.className,
-      school: classState.school,
-      nickname: classState.joinedName,
-      playerId: classState.playerId,
-      avatar: classState.avatar,
-    }),
-  );
+  if (!classState.code || !classState.joinedName) return false;
+  try {
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        code: classState.code,
+        className: classState.className,
+        school: classState.school,
+        nickname: classState.joinedName,
+        playerId: classState.playerId,
+        avatar: classState.avatar,
+      }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readAdminRooms() {
@@ -830,14 +847,24 @@ function adminRoomFallback() {
 }
 
 function restoreSession() {
-  localStorage.removeItem(storageKey);
-  const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+  try {
+    localStorage.removeItem(storageKey);
+  } catch {
+    // Alte dauerhafte Sitzungen werden ignoriert, wenn localStorage blockiert ist.
+  }
+  let saved = null;
+  try {
+    saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+  } catch {
+    return false;
+  }
   if (!saved || saved.code !== classState.code) return;
   classState.school = saved.school || classState.school;
   classState.className = saved.className || classState.className;
   classState.joinedName = saved.nickname || "";
   classState.playerId = saved.playerId || "";
   classState.avatar = saved.avatar || classState.avatar;
+  return Boolean(classState.playerId);
 }
 
 function statusLabel(match) {
@@ -1690,7 +1717,28 @@ matchList.addEventListener("click", (event) => {
     delete pickSaveMessages[matchId];
     saveButton.disabled = true;
     saveButton.textContent = "Speichere deinen Tipp...";
-    saveRemotePick(matchId, pickToSave).then((result) => {
+    saveRemotePick(matchId, pickToSave).then(async (result) => {
+      if (result.submitted && result.verification) {
+        pickSaveMessages[matchId] = "Speichern wird geprüft...";
+        renderMatches();
+        const verified = await result.verification;
+        pendingPickSaves.delete(matchId);
+        if (!verified) {
+          pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
+          renderMatches();
+          return;
+        }
+        userPicks[matchId] = pickToSave;
+        const currentDraft = draftPicks[matchId];
+        if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
+          delete draftPicks[matchId];
+        }
+        delete pickSaveMessages[matchId];
+        renderMatches();
+        renderLeaderboard();
+        return;
+      }
+
       pendingPickSaves.delete(matchId);
       if (!result.saved) {
         saveButton.disabled = result.status === 409;
@@ -1705,17 +1753,10 @@ matchList.addEventListener("click", (event) => {
       if (currentDraft?.[0] === pickToSave[0] && currentDraft?.[1] === pickToSave[1]) {
         delete draftPicks[matchId];
       }
-      pickSaveMessages[matchId] = "Tipp gespeichert – wird gleich geprüft...";
+      delete pickSaveMessages[matchId];
       renderMatches();
       renderLeaderboard();
-      result.verification.then((verified) => {
-        if (!verified) {
-          console.warn("Der Tipp wurde gespeichert, die Nachprüfung konnte aber noch nicht abgeschlossen werden.");
-        }
-        delete pickSaveMessages[matchId];
-        renderMatches();
-        renderLeaderboard();
-      });
+      syncPicks({ render: false });
     }).catch(() => {
       pendingPickSaves.delete(matchId);
       pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
@@ -1746,6 +1787,10 @@ const pathClassCode = decodeURIComponent(window.location.pathname.match(/\/klass
 if (pathClassCode || params.has("code")) {
   classState.code = (pathClassCode || params.get("code")).toUpperCase();
   restoreSession();
+  if (!classState.playerId && heroJoinMessage) {
+    heroJoinMessage.textContent = "Bitte melde dich noch einmal mit deinem gleichen Spitznamen an.";
+    heroJoinMessage.style.color = "#b8ff4d";
+  }
 }
 
 setupAvatarImages();
