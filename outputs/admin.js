@@ -83,23 +83,29 @@ function renderPickDiagnostics(player) {
   return `
     <details class="superadmin-pick-debug">
       <summary>Gespeicherte Tipps prüfen</summary>
-      <div class="superadmin-pick-debug-list">
-        ${picks.map((pick) => {
-          const matchLabel = pick.home && pick.away
-            ? `Gruppe ${pick.group} · ${pick.home} – ${pick.away}`
-            : pick.matchId;
-          const resultLabel = pick.result
-            ? `${Number(pick.result.homeScore)}:${Number(pick.result.awayScore)}`
-            : "kein Ergebnis";
-          return `
-            <div class="superadmin-pick-debug-row">
-              <strong>${escapeAdminText(matchLabel)}</strong>
-              <code>${escapeAdminText(pick.matchId)}</code>
-              <span>Tipp ${Number(pick.homeScore)}:${Number(pick.awayScore)}</span>
-              <span>Ergebnis ${escapeAdminText(resultLabel)}</span>
-              <b>${Number(pick.points || 0)} Pkt.</b>
-            </div>`;
-        }).join("")}
+      <div class="superadmin-pick-debug-meta">playerId: <code>${escapeAdminText(player.id)}</code></div>
+      <div class="superadmin-pick-debug-scroll">
+        <table>
+          <thead><tr><th>Spiel</th><th>matchId</th><th>Tipp</th><th>Ergebnis</th><th>Punkte</th></tr></thead>
+          <tbody>
+            ${picks.map((pick) => {
+              const matchLabel = pick.home && pick.away
+                ? `${pick.home} – ${pick.away}`
+                : pick.matchId;
+              const resultLabel = pick.result
+                ? `${Number(pick.result.homeScore)}:${Number(pick.result.awayScore)}`
+                : "kein Ergebnis";
+              return `
+                <tr>
+                  <td><span>Gruppe ${escapeAdminText(pick.group || "-")}</span><strong>${escapeAdminText(matchLabel)}</strong></td>
+                  <td><code>${escapeAdminText(pick.matchId)}</code></td>
+                  <td>${Number(pick.homeScore)}:${Number(pick.awayScore)}</td>
+                  <td>${escapeAdminText(resultLabel)}</td>
+                  <td><b>${Number(pick.points || 0)} Pkt.</b></td>
+                </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
       </div>
     </details>`;
 }
