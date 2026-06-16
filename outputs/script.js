@@ -14,14 +14,24 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "90",
+  scriptVersion: "91",
   sessionSource: "keine",
   sessionAvailable: false,
+  storageAvailable: "unbekannt",
+  windowNameAvailable: "unbekannt",
+  fetchAvailable: typeof window.fetch === "function",
+  userAgent: navigator.userAgent.slice(0, 120),
   loadedPickCount: 0,
   loadedMatchIds: [],
   lastSavedMatchId: "-",
   lastSaveVerification: "noch nicht gespeichert",
   lastPicksGetAt: "-",
+  lastAction: "-",
+  lastButtonDisabled: "-",
+  lastPostStartedAt: "-",
+  lastPostStatus: "-",
+  lastPostResponse: "-",
+  lastErrorText: "-",
   matchStates: [],
 };
 
@@ -40,12 +50,22 @@ function updateDebugPanel() {
     `Raumcode: ${classState.code || "-"}`,
     `Spitzname: ${classState.joinedName || "-"}`,
     `playerId: ${classState.playerId || "-"}`,
+    `User-Agent: ${debugState.userAgent}`,
+    `sessionStorage verfuegbar: ${debugState.storageAvailable}`,
+    `window.name verfuegbar: ${debugState.windowNameAvailable}`,
+    `fetch verfuegbar: ${debugState.fetchAvailable ? "ja" : "nein"}`,
     `Session vorhanden: ${debugState.sessionAvailable ? "ja" : "nein"} (${debugState.sessionSource})`,
     `Geladene Tipps: ${debugState.loadedPickCount}`,
     `Geladene matchIds: ${debugState.loadedMatchIds.join(", ") || "-"}`,
     `Zuletzt gespeichert: ${debugState.lastSavedMatchId}`,
     `Letzte Speicherprüfung: ${debugState.lastSaveVerification}`,
     `Letzter GET /api/picks: ${debugState.lastPicksGetAt}`,
+    `Letzte Aktion: ${debugState.lastAction}`,
+    `Button disabled: ${debugState.lastButtonDisabled}`,
+    `Letzter POST Start: ${debugState.lastPostStartedAt}`,
+    `Letzter POST Status: ${debugState.lastPostStatus}`,
+    `Letzte POST-Antwort: ${debugState.lastPostResponse}`,
+    `Letzter Fehler: ${debugState.lastErrorText}`,
     ...(debugState.matchStates.length ? ["", "Aktuelle Spielkarten:", ...debugState.matchStates] : []),
   ].join("\n");
 }
@@ -405,6 +425,25 @@ function setDraftPick(matchId, pick) {
   draftPicks[key] = value;
 }
 
+function refreshStorageDebugState() {
+  try {
+    const probeKey = "tipparena-storage-test";
+    sessionStorage.setItem(probeKey, "1");
+    sessionStorage.removeItem(probeKey);
+    debugState.storageAvailable = "ja";
+  } catch {
+    debugState.storageAvailable = "nein";
+  }
+  try {
+    const previous = window.name;
+    window.name = previous;
+    debugState.windowNameAvailable = "ja";
+  } catch {
+    debugState.windowNameAvailable = "nein";
+  }
+  debugState.fetchAvailable = typeof window.fetch === "function";
+}
+
 const heroJoinForm = document.querySelector("#heroJoinForm");
 const teacherLinkForm = document.querySelector("#teacherLinkForm");
 const heroJoinMessage = document.querySelector("#heroJoinMessage");
@@ -528,6 +567,14 @@ function avatarMarkup(value) {
 }
 
 async function apiRequest(path, options = {}, endpoint = `/api/${path}`) {
+  const isPost = String(options.method || "GET").toUpperCase() === "POST";
+  if (isPost) {
+    debugState.lastPostStartedAt = new Date().toLocaleTimeString("de-DE");
+    debugState.lastPostStatus = "laeuft";
+    debugState.lastPostResponse = "-";
+    debugState.lastErrorText = "-";
+    updateDebugPanel();
+  }
   try {
     const response = await fetch(endpoint, {
       ...options,
@@ -537,12 +584,23 @@ async function apiRequest(path, options = {}, endpoint = `/api/${path}`) {
       },
     });
     const data = await response.json().catch(() => ({}));
+    if (isPost) {
+      debugState.lastPostStatus = String(response.status);
+      debugState.lastPostResponse = JSON.stringify(data).slice(0, 240);
+      if (!response.ok) debugState.lastErrorText = data.error || `HTTP ${response.status}`;
+      updateDebugPanel();
+    }
     if (!response.ok) return { error: data.error || "Online-Speicherung nicht erreichbar.", status: response.status };
     remoteState.online = true;
     return data;
   } catch (error) {
     console.warn("TippArena-Anfrage fehlgeschlagen. Die nächste Anfrage versucht es erneut.", error);
-    return { error: "Online-Speicherung nicht erreichbar.", networkError: true };
+    if (isPost) {
+      debugState.lastPostStatus = "Netzwerkfehler";
+      debugState.lastErrorText = error?.message || "Netzwerkfehler";
+      updateDebugPanel();
+    }
+    return { error: "Internetverbindung prüfen und erneut speichern.", networkError: true };
   }
 }
 
@@ -778,11 +836,38 @@ async function createRemotePlayer(nickname, avatar) {
   return { ...data.player, existing: Boolean(data.existing) };
 }
 
+async function ensurePlayerSessionForSave() {
+  if (classState.playerId) return { ok: true };
+  if (!classState.code || !classState.joinedName) {
+    const message = "Bitte melde dich noch einmal mit deinem gleichen Spitznamen an.";
+    debugState.lastErrorText = message;
+    updateDebugPanel();
+    return { ok: false, error: message };
+  }
+  debugState.lastAction = "playerId fehlt - Wiederherstellung";
+  debugState.lastSaveVerification = "Spieler wird wiederhergestellt";
+  updateDebugPanel();
+  const player = await createRemotePlayer(classState.joinedName, classState.avatar);
+  if (!player || player.error || !classState.playerId) {
+    const message = player?.error || "Bitte melde dich noch einmal mit deinem gleichen Spitznamen an.";
+    debugState.lastErrorText = message;
+    updateDebugPanel();
+    return { ok: false, error: message };
+  }
+  rememberSession();
+  await syncPicks({ render: false });
+  return { ok: true };
+}
+
 async function saveRemotePick(matchId, pick) {
   const key = normalizedMatchId(matchId);
   const value = normalizedPick(pick);
-  if (!classState.code || !classState.playerId) {
-    return { saved: false, error: "Online-Speicherung nicht erreichbar." };
+  if (!classState.code) {
+    return { saved: false, error: "Bitte öffne den Klassenlink erneut und versuche es noch einmal." };
+  }
+  const sessionReady = await ensurePlayerSessionForSave();
+  if (!sessionReady.ok) {
+    return { saved: false, error: sessionReady.error };
   }
   const match = matches.find((entry) => normalizedMatchId(entry.id) === key);
   if (!match || isMatchClosed(match) || !value) {
@@ -807,9 +892,12 @@ async function saveRemotePick(matchId, pick) {
     return {
       saved: false,
       status: data?.status,
-      error: data?.status === 409
-        ? data.error
-        : "Speichern hat nicht geklappt. Bitte versuche es noch einmal.",
+      networkError: Boolean(data?.networkError),
+      error: data?.networkError
+        ? "Internetverbindung prüfen und erneut speichern."
+        : data?.status === 409
+          ? data.error
+          : data?.error || "Speichern hat nicht geklappt. Bitte öffne den Link direkt im Browser und versuche es erneut.",
     };
   }
   const confirmedPick = data.picks.find((savedPick) => (
@@ -1852,10 +1940,23 @@ matchList.addEventListener("focusout", (event) => {
   renderMatches();
 });
 
+matchList.addEventListener("pointerdown", (event) => {
+  const saveButton = event.target.closest("[data-save-pick]");
+  if (!saveButton) return;
+  debugState.lastAction = `saveButton touched (${normalizedMatchId(saveButton.dataset.savePick)})`;
+  debugState.lastButtonDisabled = saveButton.disabled ? "ja" : "nein";
+  updateDebugPanel();
+});
+
 matchList.addEventListener("click", (event) => {
   const saveButton = event.target.closest("[data-save-pick]");
-  if (saveButton && !saveButton.disabled) {
+  if (saveButton) {
     const matchId = normalizedMatchId(saveButton.dataset.savePick);
+    debugState.lastAction = `saveButton clicked (${matchId})`;
+    debugState.lastButtonDisabled = saveButton.disabled ? "ja" : "nein";
+    debugState.lastSavedMatchId = matchId;
+    updateDebugPanel();
+    if (saveButton.disabled) return;
     if (pendingPickSaves.has(matchId)) return;
     const match = matches.find((entry) => normalizedMatchId(entry.id) === matchId);
     if (!match || isMatchClosed(match)) {
@@ -1949,6 +2050,7 @@ matchList.addEventListener("click", (event) => {
 
 const params = new URLSearchParams(window.location.search);
 const pathClassCode = decodeURIComponent(window.location.pathname.match(/\/klasse\/([^/]+)/i)?.[1] || "");
+refreshStorageDebugState();
 if (pathClassCode || params.has("code")) {
   classState.code = (pathClassCode || params.get("code")).toUpperCase();
   restoreSession();
