@@ -77,6 +77,33 @@ function renderMissingPicks(player) {
     </details>`;
 }
 
+function renderPickDiagnostics(player) {
+  const picks = Array.isArray(player.pickDetails) ? player.pickDetails : [];
+  if (!picks.length) return '<p class="superadmin-pick-debug-empty">Noch keine gespeicherten Tipps für diesen Spieler.</p>';
+  return `
+    <details class="superadmin-pick-debug">
+      <summary>Gespeicherte Tipps prüfen</summary>
+      <div class="superadmin-pick-debug-list">
+        ${picks.map((pick) => {
+          const matchLabel = pick.home && pick.away
+            ? `Gruppe ${pick.group} · ${pick.home} – ${pick.away}`
+            : pick.matchId;
+          const resultLabel = pick.result
+            ? `${Number(pick.result.homeScore)}:${Number(pick.result.awayScore)}`
+            : "kein Ergebnis";
+          return `
+            <div class="superadmin-pick-debug-row">
+              <strong>${escapeAdminText(matchLabel)}</strong>
+              <code>${escapeAdminText(pick.matchId)}</code>
+              <span>Tipp ${Number(pick.homeScore)}:${Number(pick.awayScore)}</span>
+              <span>Ergebnis ${escapeAdminText(resultLabel)}</span>
+              <b>${Number(pick.points || 0)} Pkt.</b>
+            </div>`;
+        }).join("")}
+      </div>
+    </details>`;
+}
+
 function renderAdminPlayers(room) {
   const players = Array.isArray(room.players) ? room.players : [];
   if (!players.length) return '<p class="superadmin-player-empty">Noch keine Spieler in diesem Raum.</p>';
@@ -100,6 +127,7 @@ function renderAdminPlayers(room) {
           <span><b>${Number(player.points || 0)}</b> Punkte</span>
           <p class="superadmin-pick-status">${escapeAdminText(statusText)}</p>
           ${renderMissingPicks(player)}
+          ${renderPickDiagnostics(player)}
           <details class="superadmin-admin-pick">
             <summary>Tipp nachtragen</summary>
             <form data-admin-pick="${escapeAdminText(player.id)}" data-room-code="${escapeAdminText(room.roomCode)}">
@@ -330,6 +358,7 @@ superAdminSection?.addEventListener("submit", async (event) => {
     try {
       let response = await fetch("/api/admin-pick", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -341,6 +370,7 @@ superAdminSection?.addEventListener("submit", async (event) => {
         }
         response = await fetch("/api/admin-pick", {
           method: "POST",
+          cache: "no-store",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...payload, overwrite: true }),
         });
@@ -351,6 +381,15 @@ superAdminSection?.addEventListener("submit", async (event) => {
         throw new Error(data.error || "Tipp konnte nicht gespeichert werden.");
       }
       await loadAdminOverview(adminCode);
+      try {
+        if (typeof window.tipparenaRefreshResults === "function") {
+          await window.tipparenaRefreshResults();
+        } else if (typeof window.tipparenaRefreshPicks === "function") {
+          await window.tipparenaRefreshPicks();
+        }
+      } catch {
+        if (typeof window.tipparenaRefreshPicks === "function") await window.tipparenaRefreshPicks();
+      }
       superAdminMessage.textContent = data.overwritten ? "Tipp überschrieben ✓" : "Tipp nachgetragen ✓";
     } catch (error) {
       message.textContent = error.message || "Tipp konnte nicht gespeichert werden.";

@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "91",
+  scriptVersion: "92",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -783,6 +783,11 @@ async function refreshResultsNow() {
 }
 
 window.tipparenaRefreshResults = refreshResultsNow;
+window.tipparenaRefreshPicks = async function refreshPicksNow() {
+  await syncPicks();
+  renderMatches();
+  renderLeaderboard();
+};
 
 function refreshVisibleResults() {
   if (document.visibilityState !== "visible") return;

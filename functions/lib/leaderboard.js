@@ -335,3 +335,31 @@ export async function refreshLeaderboardSnapshotsForManualResult(env, movementMa
   });
   await saveSnapshots(env, rows);
 }
+
+export async function refreshLeaderboardSnapshotsForPickChange(env) {
+  const data = await loadLeaderboardData(env);
+  const manualResults = await supabase(
+    env,
+    "manual_results?select=match_id,home_score,away_score,status,minute&order=match_id.asc",
+  );
+  const results = manualResultMap(manualResults);
+  const fingerprint = manualResultFingerprint(manualResults);
+  const snapshotByRoom = new Map(data.snapshots.map((row) => [row.room_code, row]));
+  const updatedAt = new Date().toISOString();
+  const rows = data.rooms.map((room) => {
+    const previous = snapshotByRoom.get(room.code)?.snapshot || [];
+    return {
+      room_code: room.code,
+      result_fingerprint: fingerprint,
+      snapshot: rankRoom(
+        data.players.filter((player) => player.room_code === room.code),
+        data.picks.filter((pick) => pick.room_code === room.code),
+        results,
+        previous,
+        true,
+      ),
+      updated_at: updatedAt,
+    };
+  });
+  await saveSnapshots(env, rows);
+}

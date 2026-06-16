@@ -73,6 +73,25 @@ export async function onRequest(context) {
             .map((player) => {
               const playerPicks = roomPicks.filter((pick) => pick.player_id === player.id);
               const pickedMatchIds = new Set(playerPicks.map((pick) => pick.match_id));
+              const pickDetails = playerPicks
+                .map((pick) => {
+                  const match = matchCatalog.find((entry) => entry.id === pick.match_id);
+                  const result = resultsByMatch.get(pick.match_id);
+                  const tip = [Number(pick.home_score), Number(pick.away_score)];
+                  return {
+                    matchId: pick.match_id,
+                    group: match?.group || "",
+                    home: match?.home || "",
+                    away: match?.away || "",
+                    homeScore: tip[0],
+                    awayScore: tip[1],
+                    result: result ? { homeScore: result[0], awayScore: result[1] } : null,
+                    points: scorePick(tip, result),
+                    source: "picks",
+                    updatedAt: pick.updated_at || null,
+                  };
+                })
+                .sort((left, right) => left.matchId.localeCompare(right.matchId));
               const missingPicks = matchCatalog
                 .filter((match) => !pickedMatchIds.has(match.id))
                 .map((match) => ({
@@ -84,6 +103,7 @@ export async function onRequest(context) {
                 nickname: player.nickname,
                 avatar: player.avatar,
                 pickCount: playerPicks.length,
+                pickDetails,
                 totalMatchCount: matchCatalog.length,
                 missingOpenCount: missingPicks.filter((match) => !match.closed).length,
                 missingClosedCount: missingPicks.filter((match) => match.closed).length,

@@ -1,5 +1,6 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
 import { matchKickoff } from "../lib/matches.js";
+import { refreshLeaderboardSnapshotsForPickChange } from "../lib/leaderboard.js";
 
 function validScore(value) {
   const score = Number(value);
@@ -65,11 +66,19 @@ export async function onRequest(context) {
         updated_at: new Date().toISOString(),
       }),
     });
+    let leaderboardWarning = null;
+    try {
+      await refreshLeaderboardSnapshotsForPickChange(env);
+    } catch (error) {
+      console.error("Admin-Tipp gespeichert, Rangliste konnte aber nicht aktualisiert werden", { error: error.message });
+      leaderboardWarning = "Der Tipp wurde gespeichert, die Rangliste konnte aber nicht sofort aktualisiert werden.";
+    }
 
     const response = jsonResponse(200, {
       success: true,
       overwritten: existing.length > 0,
       pick: saved[0],
+      ...(leaderboardWarning ? { warning: leaderboardWarning } : {}),
     });
     response.headers.set("Cache-Control", "no-store");
     return response;
