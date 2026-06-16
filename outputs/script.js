@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "92",
+  scriptVersion: "93",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -1450,6 +1450,12 @@ function latestFinishedPickMarkup(player, match) {
   return `<small class="latest-finished-pick ${points === 3 ? "is-perfect" : ""}">${matchLabel} ${pick[0]}:${pick[1]} · +${points} Pkt.</small>`;
 }
 
+function adjustmentPointsMarkup(player) {
+  const adjustment = Number(player.adjustmentPoints || 0);
+  if (!adjustment) return "";
+  return `<small class="leader-adjustment">inkl. ${adjustment > 0 ? "+" : ""}${adjustment} Korrektur</small>`;
+}
+
 function leaderboardPlayerKey(player) {
   return player.id || player.name;
 }
@@ -1491,6 +1497,11 @@ function renderLeaderboard() {
     picks: player.id === classState.playerId || player.nickname === classState.joinedName ? userPicks : remotePicksForPlayer(player.id),
     movement: Number(remoteState.leaderboardByPlayer[player.id]?.movement || 0),
     movementMatchId: remoteState.leaderboardByPlayer[player.id]?.movementMatchId || null,
+    serverPoints: Number.isFinite(Number(remoteState.leaderboardByPlayer[player.id]?.points))
+      ? Number(remoteState.leaderboardByPlayer[player.id].points)
+      : null,
+    basePoints: Number(remoteState.leaderboardByPlayer[player.id]?.basePoints || 0),
+    adjustmentPoints: Number(remoteState.leaderboardByPlayer[player.id]?.adjustmentPoints || 0),
     current: player.id === classState.playerId || player.nickname === classState.joinedName,
   }));
   const hasRemoteRows = remoteRows.length > 0;
@@ -1516,7 +1527,7 @@ function renderLeaderboard() {
 
   const lastFinishedMatch = latestFinishedMatch();
   const ranked = applyLastFinishedMatchMovement(
-    rankLeaderboardRows(rows, (player) => totalPoints(player.picks)),
+    rankLeaderboardRows(rows, (player) => Number.isFinite(player.serverPoints) ? player.serverPoints : totalPoints(player.picks)),
     rows,
     lastFinishedMatch,
   );
@@ -1588,6 +1599,7 @@ function renderLeaderboard() {
               <span class="podium-rank">${index === 0 ? "Champion" : `Platz ${index + 1}`}</span>
               <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
               <b>${player.points} Punkte</b>
+              ${adjustmentPointsMarkup(player)}
               <small class="placement-message">${playerStory(player, index + 1)}</small>
             </article>
           `,
@@ -1604,6 +1616,7 @@ function renderLeaderboard() {
           <div class="leader-player">
             <strong>${player.avatar ? avatarMarkup(player.avatar) : ""}${player.name}</strong>
             ${latestFinishedPickMarkup(player, matches.find((match) => match.id === player.movementMatchId) || lastFinishedMatch)}
+            ${adjustmentPointsMarkup(player)}
             <small class="placement-message">${playerStory(player, index + 1)}</small>
           </div>
           ${movementMarkup(player.movement, index + 1, ranked.length)}

@@ -79,12 +79,26 @@ function renderMissingPicks(player) {
 
 function renderPickDiagnostics(player) {
   const picks = Array.isArray(player.pickDetails) ? player.pickDetails : [];
-  if (!picks.length) return '<p class="superadmin-pick-debug-empty">Noch keine gespeicherten Tipps für diesen Spieler.</p>';
+  const adjustments = Array.isArray(player.pointAdjustments) ? player.pointAdjustments : [];
+  const adjustmentRows = adjustments.length
+    ? adjustments.map((entry) => `
+        <tr>
+          <td>${Number(entry.points || 0) > 0 ? "+" : ""}${Number(entry.points || 0)}</td>
+          <td>${escapeAdminText(entry.reason || "-")}</td>
+          <td>${escapeAdminText(formatAdminDate(entry.createdAt))}</td>
+          <td><button type="button" data-delete-adjustment="${escapeAdminText(entry.id)}" data-player-id="${escapeAdminText(player.id)}">Löschen</button></td>
+        </tr>`).join("")
+    : '<tr><td colspan="4">Keine Korrekturen gespeichert.</td></tr>';
   return `
     <details class="superadmin-pick-debug">
       <summary>Gespeicherte Tipps prüfen</summary>
       <div class="superadmin-pick-debug-meta">playerId: <code>${escapeAdminText(player.id)}</code></div>
-      <div class="superadmin-pick-debug-scroll">
+      <div class="superadmin-points-summary">
+        <span>Tipp-Punkte <b>${Number(player.tipPoints || 0)}</b></span>
+        <span>Korrekturpunkte <b>${Number(player.adjustmentPoints || 0) > 0 ? "+" : ""}${Number(player.adjustmentPoints || 0)}</b></span>
+        <span>Gesamt <b>${Number((player.totalPoints ?? player.points) || 0)}</b></span>
+      </div>
+      ${picks.length ? `<div class="superadmin-pick-debug-scroll">
         <table>
           <thead><tr><th>Spiel</th><th>matchId</th><th>Tipp</th><th>Ergebnis</th><th>Punkte</th></tr></thead>
           <tbody>
@@ -106,7 +120,27 @@ function renderPickDiagnostics(player) {
             }).join("")}
           </tbody>
         </table>
+      </div>` : '<p class="superadmin-pick-debug-empty">Noch keine gespeicherten Tipps für diesen Spieler.</p>'}
+      <div class="superadmin-pick-debug-scroll superadmin-adjustment-history">
+        <table>
+          <thead><tr><th>Korrektur</th><th>Grund</th><th>Datum</th><th>Aktion</th></tr></thead>
+          <tbody>${adjustmentRows}</tbody>
+        </table>
       </div>
+    </details>`;
+}
+
+function renderPointAdjustmentForm(player, room) {
+  const adjustmentPoints = Number(player.adjustmentPoints || 0);
+  return `
+    <details class="superadmin-point-adjustment">
+      <summary>Punkte korrigieren</summary>
+      <form data-point-adjustment="${escapeAdminText(player.id)}" data-room-code="${escapeAdminText(room.roomCode)}">
+        <label>Punkte<input name="points" type="number" min="-50" max="50" step="1" placeholder="+2" required /></label>
+        <label>Grund<input name="reason" type="text" maxlength="160" placeholder="z. B. Neuseeland – Iran" required /></label>
+        <button type="submit">Korrektur speichern</button>
+        <p>Korrektur aktuell: <b>${adjustmentPoints > 0 ? "+" : ""}${adjustmentPoints}</b></p>
+      </form>
     </details>`;
 }
 
@@ -130,10 +164,12 @@ function renderAdminPlayers(room) {
           <img src="${adminAvatarPath(player.avatar)}" alt="" />
           <strong>${escapeAdminText(player.nickname)}</strong>
           <span><b>${pickCount}</b> Tipps gespeichert</span>
-          <span><b>${Number(player.points || 0)}</b> Punkte</span>
+          <span><b>${Number((player.totalPoints ?? player.points) || 0)}</b> Punkte gesamt</span>
+          <small class="superadmin-player-points">Tipp-Punkte: ${Number(player.tipPoints || 0)} · Korrektur: ${Number(player.adjustmentPoints || 0) > 0 ? "+" : ""}${Number(player.adjustmentPoints || 0)}</small>
           <p class="superadmin-pick-status">${escapeAdminText(statusText)}</p>
           ${renderMissingPicks(player)}
           ${renderPickDiagnostics(player)}
+          ${renderPointAdjustmentForm(player, room)}
           <details class="superadmin-admin-pick">
             <summary>Tipp nachtragen</summary>
             <form data-admin-pick="${escapeAdminText(player.id)}" data-room-code="${escapeAdminText(room.roomCode)}">
@@ -267,6 +303,19 @@ async function loadAdminOverview(adminCode) {
   renderAdminResults(resultData.results);
 }
 
+async function refreshAdminAndLeaderboard(adminCode) {
+  await loadAdminOverview(adminCode);
+  try {
+    if (typeof window.tipparenaRefreshResults === "function") {
+      await window.tipparenaRefreshResults();
+    } else if (typeof window.tipparenaRefreshPicks === "function") {
+      await window.tipparenaRefreshPicks();
+    }
+  } catch {
+    if (typeof window.tipparenaRefreshPicks === "function") await window.tipparenaRefreshPicks();
+  }
+}
+
 function addDangerZone() {
   if (!superAdminSection || document.querySelector("#superAdminResetForm")) return;
   const dangerZone = document.createElement("section");
@@ -386,19 +435,55 @@ superAdminSection?.addEventListener("submit", async (event) => {
         if (response.status === 401) clearAdminCode();
         throw new Error(data.error || "Tipp konnte nicht gespeichert werden.");
       }
-      await loadAdminOverview(adminCode);
-      try {
-        if (typeof window.tipparenaRefreshResults === "function") {
-          await window.tipparenaRefreshResults();
-        } else if (typeof window.tipparenaRefreshPicks === "function") {
-          await window.tipparenaRefreshPicks();
-        }
-      } catch {
-        if (typeof window.tipparenaRefreshPicks === "function") await window.tipparenaRefreshPicks();
-      }
+      await refreshAdminAndLeaderboard(adminCode);
       superAdminMessage.textContent = data.overwritten ? "Tipp überschrieben ✓" : "Tipp nachgetragen ✓";
     } catch (error) {
       message.textContent = error.message || "Tipp konnte nicht gespeichert werden.";
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+    return;
+  }
+
+  const adjustmentForm = event.target.closest("[data-point-adjustment]");
+  if (adjustmentForm) {
+    event.preventDefault();
+    const adminCode = storedAdminCode();
+    const message = adjustmentForm.querySelector("p");
+    if (!adminCode) {
+      message.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
+      return;
+    }
+    const button = adjustmentForm.querySelector("button");
+    const originalLabel = button.textContent;
+    const values = new FormData(adjustmentForm);
+    button.disabled = true;
+    button.textContent = "Speichere...";
+    message.textContent = "Korrektur wird gespeichert...";
+    try {
+      const response = await fetch("/api/admin-point-adjustments", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminCode,
+          action: "save",
+          roomCode: adjustmentForm.dataset.roomCode,
+          playerId: adjustmentForm.dataset.pointAdjustment,
+          points: values.get("points"),
+          reason: values.get("reason"),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) clearAdminCode();
+        throw new Error(data.error || "Korrektur konnte nicht gespeichert werden.");
+      }
+      await refreshAdminAndLeaderboard(adminCode);
+      superAdminMessage.textContent = "Punkte-Korrektur gespeichert ✓";
+    } catch (error) {
+      message.textContent = error.message || "Korrektur konnte nicht gespeichert werden.";
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
@@ -494,6 +579,44 @@ superAdminSection?.addEventListener("submit", async (event) => {
 });
 
 superAdminRooms?.addEventListener("click", async (event) => {
+  const adjustmentDelete = event.target.closest("[data-delete-adjustment]");
+  if (adjustmentDelete) {
+    const adminCode = storedAdminCode();
+    if (!adminCode) {
+      superAdminMessage.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
+      return;
+    }
+    if (!window.confirm("Diese Punkte-Korrektur wirklich löschen?")) return;
+    const roomCode = adjustmentDelete.closest("[data-player-detail]")?.dataset.playerDetail || "";
+    adjustmentDelete.disabled = true;
+    superAdminMessage.textContent = "Korrektur wird gelöscht...";
+    try {
+      const response = await fetch("/api/admin-point-adjustments", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminCode,
+          action: "delete",
+          roomCode,
+          playerId: adjustmentDelete.dataset.playerId,
+          adjustmentId: adjustmentDelete.dataset.deleteAdjustment,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) clearAdminCode();
+        throw new Error(data.error || "Korrektur konnte nicht gelöscht werden.");
+      }
+      await refreshAdminAndLeaderboard(adminCode);
+      superAdminMessage.textContent = "Punkte-Korrektur gelöscht ✓";
+    } catch (error) {
+      superAdminMessage.textContent = error.message || "Korrektur konnte nicht gelöscht werden.";
+      adjustmentDelete.disabled = false;
+    }
+    return;
+  }
+
   const toggle = event.target.closest("[data-toggle-players]");
   if (toggle) {
     const roomCode = toggle.dataset.togglePlayers;

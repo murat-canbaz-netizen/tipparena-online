@@ -142,7 +142,22 @@ function manualResultMap(results) {
   );
 }
 
-function rankRoom(players, picks, results, previous = [], preserveUnchangedMovement = false, movementMatchId = null) {
+function adjustmentTotal(adjustments = [], playerId) {
+  return adjustments
+    .filter((entry) => entry.player_id === playerId)
+    .reduce((sum, entry) => sum + Number(entry.points || 0), 0);
+}
+
+async function loadPointAdjustments(env) {
+  try {
+    return await supabase(env, "point_adjustments?select=id,room_code,player_id,points,reason,created_at,created_by");
+  } catch (error) {
+    if (String(error.message || "").includes("point_adjustments")) return [];
+    throw error;
+  }
+}
+
+function rankRoom(players, picks, results, previous = [], preserveUnchangedMovement = false, movementMatchId = null, adjustments = []) {
   const previousByPlayer = new Map(previous.map((entry) => [entry.playerId, entry]));
   return players
     .map((player, order) => {
@@ -157,10 +172,14 @@ function rankRoom(players, picks, results, previous = [], preserveUnchangedMovem
             result,
           );
         });
+      const basePoints = Object.values(scores).reduce((sum, points) => sum + points, 0);
+      const adjustmentPoints = adjustmentTotal(adjustments, player.id);
       return {
         playerId: player.id,
         nickname: player.nickname,
-        points: Object.values(scores).reduce((sum, points) => sum + points, 0),
+        points: basePoints + adjustmentPoints,
+        basePoints,
+        adjustmentPoints,
         scores,
         order,
       };
@@ -175,6 +194,8 @@ function rankRoom(players, picks, results, previous = [], preserveUnchangedMovem
         nickname: player.nickname,
         rank,
         points: player.points,
+        basePoints: player.basePoints,
+        adjustmentPoints: player.adjustmentPoints,
         movement: previousPlayer
           ? previousPlayer.rank - rank
             || (preserveUnchangedMovement && sameScores ? Number(previousPlayer.movement || 0) : 0)
@@ -187,13 +208,14 @@ function rankRoom(players, picks, results, previous = [], preserveUnchangedMovem
 }
 
 async function loadLeaderboardData(env) {
-  const [rooms, players, picks, snapshots] = await Promise.all([
+  const [rooms, players, picks, snapshots, adjustments] = await Promise.all([
     supabase(env, "rooms?class_name=neq.__TEACHER__&select=code"),
     supabase(env, "players?select=id,room_code,nickname,created_at&order=created_at.asc"),
     supabase(env, "picks?select=room_code,player_id,match_id,home_score,away_score"),
     supabase(env, "leaderboard_snapshots?select=room_code,result_fingerprint,snapshot"),
+    loadPointAdjustments(env),
   ]);
-  return { rooms, players, picks, snapshots };
+  return { rooms, players, picks, snapshots, adjustments };
 }
 
 async function loadRoomsAndSnapshots(env) {
@@ -219,9 +241,10 @@ export async function refreshLeaderboardSnapshots(env, fixtures = []) {
   const existing = await loadRoomsAndSnapshots(env);
   const snapshotByRoom = new Map(existing.snapshots.map((row) => [row.room_code, row]));
   if (existing.rooms.every((room) => snapshotByRoom.get(room.code)?.result_fingerprint === fingerprint)) return;
-  const [players, picks] = await Promise.all([
+  const [players, picks, adjustments] = await Promise.all([
     supabase(env, "players?select=id,room_code,nickname,created_at&order=created_at.asc"),
     supabase(env, "picks?select=room_code,player_id,match_id,home_score,away_score"),
+    loadPointAdjustments(env),
   ]);
 
   const updatedAt = new Date().toISOString();
@@ -239,6 +262,7 @@ export async function refreshLeaderboardSnapshots(env, fixtures = []) {
         previous,
         String(previousRow?.result_fingerprint || "").startsWith("manual:"),
         movementMatchId,
+        adjustments.filter((entry) => entry.room_code === room.code),
       ),
       updated_at: updatedAt,
     };
@@ -265,6 +289,10 @@ export async function ensureLeaderboardSnapshotsBeforeManualResult(env) {
       data.players.filter((player) => player.room_code === room.code),
       data.picks.filter((pick) => pick.room_code === room.code),
       results,
+      [],
+      false,
+      null,
+      data.adjustments.filter((entry) => entry.room_code === room.code),
     ),
     updated_at: updatedAt,
   })));
@@ -284,48 +312,17 @@ export async function refreshLeaderboardSnapshotsForManualResult(env, movementMa
     if (previousRow?.result_fingerprint === fingerprint) return [];
 
     const previous = previousRow?.snapshot || [];
-    const previousByPlayer = new Map(previous.map((entry) => [entry.playerId, entry]));
     const players = data.players.filter((player) => player.room_code === room.code);
     const roomPicks = data.picks.filter((pick) => pick.room_code === room.code);
-    const current = players
-      .map((player, order) => {
-        const previousPlayer = previousByPlayer.get(player.id);
-        const scores = { ...(previousPlayer?.scores || {}) };
-        manualResults.forEach((manualResult) => {
-          const pick = roomPicks.find(
-            (entry) => entry.player_id === player.id && entry.match_id === manualResult.match_id,
-          );
-          if (pick && manualResult.status !== "open") {
-            scores[manualResult.match_id] = scorePick(
-              [Number(pick.home_score), Number(pick.away_score)],
-              [Number(manualResult.home_score), Number(manualResult.away_score)],
-            );
-          } else {
-            delete scores[manualResult.match_id];
-          }
-        });
-        return {
-          playerId: player.id,
-          nickname: player.nickname,
-          points: Object.values(scores).reduce((sum, points) => sum + points, 0),
-          scores,
-          order,
-        };
-      })
-      .sort((left, right) => right.points - left.points || left.order - right.order)
-      .map((player, index) => {
-        const previousPlayer = previousByPlayer.get(player.playerId);
-        const rank = index + 1;
-        return {
-          playerId: player.playerId,
-          nickname: player.nickname,
-          rank,
-          points: player.points,
-          movement: previousPlayer ? previousPlayer.rank - rank : 0,
-          movementMatchId,
-          scores: player.scores,
-        };
-      });
+    const current = rankRoom(
+      players,
+      roomPicks,
+      manualResultMap(manualResults),
+      previous,
+      false,
+      movementMatchId,
+      data.adjustments.filter((entry) => entry.room_code === room.code),
+    );
     return {
       room_code: room.code,
       result_fingerprint: fingerprint,
@@ -357,6 +354,8 @@ export async function refreshLeaderboardSnapshotsForPickChange(env) {
         results,
         previous,
         true,
+        null,
+        data.adjustments.filter((entry) => entry.room_code === room.code),
       ),
       updated_at: updatedAt,
     };

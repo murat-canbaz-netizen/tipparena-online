@@ -1448,6 +1448,19 @@ footer,
   color: #237a4b;
 }
 
+.leader-adjustment {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid rgba(47, 123, 215, 0.18);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(47, 123, 215, 0.08);
+  color: #2f5f9d;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
 .leader-row.rank-1 .placement-message,
 .podium-1 .placement-message {
   color: #fff4bd;

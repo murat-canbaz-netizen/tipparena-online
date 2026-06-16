@@ -20,6 +20,15 @@ function scorePick(pick, result) {
   return 0;
 }
 
+async function loadPointAdjustments(env) {
+  try {
+    return await supabase(env, "point_adjustments?select=id,room_code,player_id,points,reason,created_at,created_by");
+  } catch (error) {
+    if (String(error.message || "").includes("point_adjustments")) return [];
+    throw error;
+  }
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
@@ -37,11 +46,12 @@ export async function onRequest(context) {
   }
 
   try {
-    const [roomRows, players, picks, manualResults] = await Promise.all([
+    const [roomRows, players, picks, manualResults, pointAdjustments] = await Promise.all([
       supabase(env, "rooms?select=code,school,class_name,student_count,created_at&order=created_at.desc"),
       supabase(env, "players?select=id,room_code,nickname,avatar,created_at"),
       supabase(env, "picks?select=room_code,player_id,match_id,home_score,away_score,updated_at"),
       supabase(env, "manual_results?select=match_id,home_score,away_score,status"),
+      loadPointAdjustments(env),
     ]);
     const resultsByMatch = new Map(
       manualResults
@@ -72,6 +82,17 @@ export async function onRequest(context) {
           players: roomPlayers
             .map((player) => {
               const playerPicks = roomPicks.filter((pick) => pick.player_id === player.id);
+              const playerAdjustments = pointAdjustments
+                .filter((entry) => entry.room_code === room.code && entry.player_id === player.id)
+                .map((entry) => ({
+                  id: entry.id,
+                  points: Number(entry.points || 0),
+                  reason: entry.reason || "",
+                  createdAt: entry.created_at || null,
+                  createdBy: entry.created_by || null,
+                }))
+                .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
+              const adjustmentPoints = playerAdjustments.reduce((sum, entry) => sum + entry.points, 0);
               const pickedMatchIds = new Set(playerPicks.map((pick) => pick.match_id));
               const pickDetails = playerPicks
                 .map((pick) => {
@@ -98,23 +119,28 @@ export async function onRequest(context) {
                   ...match,
                   closed: now >= Date.parse(match.kickoff),
                 }));
+              const tipPoints = playerPicks.reduce(
+                (sum, pick) => sum + scorePick(
+                  [Number(pick.home_score), Number(pick.away_score)],
+                  resultsByMatch.get(pick.match_id),
+                ),
+                0,
+              );
               return {
                 id: player.id,
                 nickname: player.nickname,
                 avatar: player.avatar,
                 pickCount: playerPicks.length,
                 pickDetails,
+                tipPoints,
+                adjustmentPoints,
+                totalPoints: tipPoints + adjustmentPoints,
+                pointAdjustments: playerAdjustments,
                 totalMatchCount: matchCatalog.length,
                 missingOpenCount: missingPicks.filter((match) => !match.closed).length,
                 missingClosedCount: missingPicks.filter((match) => match.closed).length,
                 missingPicks,
-                points: playerPicks.reduce(
-                  (sum, pick) => sum + scorePick(
-                    [Number(pick.home_score), Number(pick.away_score)],
-                    resultsByMatch.get(pick.match_id),
-                  ),
-                  0,
-                ),
+                points: tipPoints + adjustmentPoints,
               };
             })
             .sort((left, right) => left.nickname.localeCompare(right.nickname, "de")),
