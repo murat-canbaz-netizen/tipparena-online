@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "93",
+  scriptVersion: "94",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -386,6 +386,7 @@ const remoteState = {
   online: true,
   players: [],
   picksByPlayer: {},
+  adjustmentsByPlayer: {},
   leaderboardByPlayer: {},
 };
 let liveResultsTimer = null;
@@ -630,6 +631,18 @@ function setRemotePicks(picks = []) {
   }, {});
 }
 
+function setRemoteAdjustments(adjustments = []) {
+  remoteState.adjustmentsByPlayer = adjustments.reduce((map, entry) => {
+    const playerId = entry.player_id;
+    map[playerId] = (map[playerId] || 0) + Number(entry.points || 0);
+    return map;
+  }, {});
+}
+
+function adjustmentPointsForPlayer(playerId) {
+  return Number(remoteState.adjustmentsByPlayer[playerId] || 0);
+}
+
 async function syncRoom() {
   if (!classState.code) return;
   const data = await apiRequest("room", {}, `/api/room?code=${encodeURIComponent(classState.code)}`);
@@ -653,6 +666,7 @@ async function syncPicks({ render = true, replaceUserPicks = true } = {}) {
   }
   remoteState.players = data.players || remoteState.players;
   setRemotePicks(data.picks || []);
+  setRemoteAdjustments(data.adjustments || []);
   remoteState.leaderboardByPlayer = (data.leaderboard || []).reduce((map, entry) => {
     map[entry.playerId] = entry;
     return map;
@@ -1477,7 +1491,9 @@ function applyLastFinishedMatchMovement(ranked, rows, lastFinishedMatch) {
   const previousRankByPlayer = new Map(
     rankLeaderboardRows(
       rows,
-      (player) => totalPoints(player.picks) - scorePick(player.picks?.[lastFinishedMatch.id], lastFinishedMatch.result),
+      (player) => totalPoints(player.picks)
+        - scorePick(player.picks?.[lastFinishedMatch.id], lastFinishedMatch.result)
+        + Number(player.adjustmentPoints || 0),
     ).map((player, index) => [leaderboardPlayerKey(player), index + 1]),
   );
   return ranked.map((player, index) => ({
@@ -1497,11 +1513,7 @@ function renderLeaderboard() {
     picks: player.id === classState.playerId || player.nickname === classState.joinedName ? userPicks : remotePicksForPlayer(player.id),
     movement: Number(remoteState.leaderboardByPlayer[player.id]?.movement || 0),
     movementMatchId: remoteState.leaderboardByPlayer[player.id]?.movementMatchId || null,
-    serverPoints: Number.isFinite(Number(remoteState.leaderboardByPlayer[player.id]?.points))
-      ? Number(remoteState.leaderboardByPlayer[player.id].points)
-      : null,
-    basePoints: Number(remoteState.leaderboardByPlayer[player.id]?.basePoints || 0),
-    adjustmentPoints: Number(remoteState.leaderboardByPlayer[player.id]?.adjustmentPoints || 0),
+    adjustmentPoints: adjustmentPointsForPlayer(player.id),
     current: player.id === classState.playerId || player.nickname === classState.joinedName,
   }));
   const hasRemoteRows = remoteRows.length > 0;
@@ -1527,7 +1539,7 @@ function renderLeaderboard() {
 
   const lastFinishedMatch = latestFinishedMatch();
   const ranked = applyLastFinishedMatchMovement(
-    rankLeaderboardRows(rows, (player) => Number.isFinite(player.serverPoints) ? player.serverPoints : totalPoints(player.picks)),
+    rankLeaderboardRows(rows, (player) => totalPoints(player.picks) + Number(player.adjustmentPoints || 0)),
     rows,
     lastFinishedMatch,
   );

@@ -11,6 +11,18 @@ function noStoreJson(status, body) {
   return response;
 }
 
+async function loadPointAdjustments(env, room) {
+  try {
+    return await supabase(
+      env,
+      `point_adjustments?room_code=eq.${encodeURIComponent(room)}&select=id,room_code,player_id,points,reason,created_at,created_by`,
+    );
+  } catch (error) {
+    if (String(error.message || "").includes("point_adjustments")) return [];
+    throw error;
+  }
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
@@ -21,7 +33,7 @@ export async function onRequest(context) {
       if (!room) return noStoreJson(400, { error: "Raumcode fehlt." });
 
       const encodedRoom = encodeURIComponent(room);
-      const [players, picks, snapshots] = await Promise.all([
+      const [players, picks, snapshots, adjustments] = await Promise.all([
         supabase(
           env,
           `players?room_code=eq.${encodedRoom}&select=id,nickname,avatar,created_at&order=created_at.asc`,
@@ -34,6 +46,7 @@ export async function onRequest(context) {
           env,
           `leaderboard_snapshots?room_code=eq.${encodedRoom}&select=snapshot&limit=1`,
         ),
+        loadPointAdjustments(env, room),
       ]);
       console.info("Tipps geladen", {
         roomCode: room,
@@ -41,7 +54,7 @@ export async function onRequest(context) {
         pickCount: picks.length,
         matchIds: [...new Set(picks.map((pick) => pick.match_id))],
       });
-      return noStoreJson(200, { players, picks, leaderboard: snapshots[0]?.snapshot || [] });
+      return noStoreJson(200, { players, picks, adjustments, leaderboard: snapshots[0]?.snapshot || [] });
     }
 
     if (request.method === "POST") {
