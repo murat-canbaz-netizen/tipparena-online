@@ -243,7 +243,8 @@ function renderAdminPlayers(room) {
               </select></label>
               <label class="superadmin-admin-pick-score">Heim<input name="homeScore" type="number" min="0" max="20" value="0" required /></label>
               <label class="superadmin-admin-pick-score">Auswärts<input name="awayScore" type="number" min="0" max="20" value="0" required /></label>
-              <button class="superadmin-admin-pick-save" type="submit">Tipp speichern</button>
+              <button class="superadmin-admin-pick-save" type="submit" name="adminPickAction" value="save">Tipp speichern</button>
+              <button class="superadmin-admin-pick-test" type="submit" name="adminPickAction" value="test">Speicher-Test</button>
               <p role="status"></p>
             </form>
           </details>
@@ -657,7 +658,8 @@ superAdminSection?.addEventListener("submit", async (event) => {
       message.textContent = "Bitte zuerst den Admin-Code oben eingeben.";
       return;
     }
-    const button = pickForm.querySelector("button");
+    const action = event.submitter?.value === "test" ? "test" : "save";
+    const button = event.submitter || pickForm.querySelector("button");
     const originalLabel = button.textContent;
     const values = new FormData(pickForm);
     const payload = {
@@ -667,11 +669,12 @@ superAdminSection?.addEventListener("submit", async (event) => {
       matchId: values.get("matchId"),
       homeScore: values.get("homeScore"),
       awayScore: values.get("awayScore"),
+      action,
       overwrite: false,
     };
     button.disabled = true;
-    button.textContent = "Speichere...";
-    message.textContent = "Tipp wird gespeichert...";
+    button.textContent = action === "test" ? "Teste..." : "Speichere...";
+    message.textContent = action === "test" ? "Speicher-Test läuft..." : "Tipp wird gespeichert...";
     try {
       let response = await fetch("/api/admin-pick", {
         method: "POST",
@@ -680,6 +683,14 @@ superAdminSection?.addEventListener("submit", async (event) => {
         body: JSON.stringify(payload),
       });
       let data = await response.json().catch(() => ({}));
+      if (action === "test") {
+        if (!response.ok) {
+          if (response.status === 401) clearAdminCode();
+          throw new Error(data.error || "Speicher-Test konnte nicht ausgeführt werden.");
+        }
+        message.textContent = `${data.wouldSave ? "Würde speichern: ja" : "Würde speichern: nein"} · ${data.reason || "-"}${data.existingPick ? ` · vorhandener Tipp: ${data.existingPick.homeScore}:${data.existingPick.awayScore}` : ""}`;
+        return;
+      }
       if (response.status === 409) {
         if (!window.confirm(data.error || "Für dieses Kind gibt es bereits einen Tipp. Wirklich überschreiben?")) {
           message.textContent = "Bestehender Tipp wurde nicht verändert.";

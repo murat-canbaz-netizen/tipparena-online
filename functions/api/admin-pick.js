@@ -21,6 +21,7 @@ export async function onRequest(context) {
   const homeScore = validScore(body.homeScore);
   const awayScore = validScore(body.awayScore);
   const overwrite = body.overwrite === true;
+  const action = String(body.action || "save");
 
   if (!adminKey) return jsonResponse(503, { error: "Der private Adminbereich ist noch nicht konfiguriert." });
   if (!submittedKey || submittedKey !== adminKey) return jsonResponse(401, { error: "Admin-Code ist nicht korrekt." });
@@ -39,6 +40,33 @@ export async function onRequest(context) {
       `players?id=eq.${encodedPlayer}&room_code=eq.${encodedRoom}&select=id,nickname&limit=1`,
     );
     if (!player.length) return jsonResponse(404, { error: "Dieser Spieler wurde in dem Raum nicht gefunden." });
+
+    if (action === "test") {
+      const kickoff = matchKickoff(matchId);
+      const closed = Date.now() >= kickoff;
+      const existing = await supabase(
+        env,
+        `picks?player_id=eq.${encodedPlayer}&match_id=eq.${encodedMatch}&select=home_score,away_score,updated_at&limit=1`,
+      );
+      const response = jsonResponse(200, {
+        success: true,
+        testOnly: true,
+        wouldSave: !closed,
+        reason: closed ? "Das Spiel hat bereits begonnen. Ein Schüler-Tipp würde abgelehnt." : "Der Schüler-Tipp würde serverseitig akzeptiert.",
+        roomCode,
+        playerId,
+        nickname: player[0].nickname,
+        matchId,
+        kickoff: new Date(kickoff).toISOString(),
+        existingPick: existing[0] ? {
+          homeScore: Number(existing[0].home_score),
+          awayScore: Number(existing[0].away_score),
+          updatedAt: existing[0].updated_at || null,
+        } : null,
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
 
     const existing = await supabase(
       env,

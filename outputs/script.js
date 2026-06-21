@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "98",
+  scriptVersion: "99",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -29,12 +29,19 @@ const debugState = {
   lastAction: "-",
   lastButtonDisabled: "-",
   lastPostStartedAt: "-",
+  lastPostEndpoint: "-",
+  lastPostPayload: "-",
   lastPostStatus: "-",
   lastPostResponse: "-",
   lastErrorText: "-",
   normalizedNickname: "-",
   playerRecovery: "-",
   matchingPlayers: "-",
+  saveButtonClicked: "nein",
+  saveStarted: "nein",
+  currentSaveMatchId: "-",
+  currentSavePick: "-",
+  saveConfirmed: "nein",
   matchStates: [],
 };
 
@@ -75,10 +82,17 @@ function updateDebugPanel() {
     `Letzter GET /api/picks: ${debugState.lastPicksGetAt}`,
     `Letzte Aktion: ${debugState.lastAction}`,
     `Button disabled: ${debugState.lastButtonDisabled}`,
+    `Save-Button geklickt: ${debugState.saveButtonClicked}`,
+    `Speichern gestartet: ${debugState.saveStarted}`,
+    `Aktuelle matchId: ${debugState.currentSaveMatchId}`,
+    `Aktueller Tippwert: ${debugState.currentSavePick}`,
     `Letzter POST Start: ${debugState.lastPostStartedAt}`,
+    `Letzter POST Endpoint: ${debugState.lastPostEndpoint}`,
+    `Letzter POST Payload: ${debugState.lastPostPayload}`,
     `Letzter POST Status: ${debugState.lastPostStatus}`,
     `Letzte POST-Antwort: ${debugState.lastPostResponse}`,
     `Letzter Fehler: ${debugState.lastErrorText}`,
+    `Speicherbestätigung: ${debugState.saveConfirmed}`,
     `Player-Recovery: ${debugState.playerRecovery}`,
     `Passende Spielerprofile: ${debugState.matchingPlayers}`,
     ...(debugState.matchStates.length ? ["", "Aktuelle Spielkarten:", ...debugState.matchStates] : []),
@@ -587,6 +601,8 @@ async function apiRequest(path, options = {}, endpoint = `/api/${path}`) {
   const isPost = String(options.method || "GET").toUpperCase() === "POST";
   if (isPost) {
     debugState.lastPostStartedAt = new Date().toLocaleTimeString("de-DE");
+    debugState.lastPostEndpoint = endpoint;
+    debugState.lastPostPayload = String(options.body || "-").slice(0, 260);
     debugState.lastPostStatus = "laeuft";
     debugState.lastPostResponse = "-";
     debugState.lastErrorText = "-";
@@ -905,6 +921,11 @@ async function ensurePlayerSessionForSave() {
 async function saveRemotePick(matchId, pick) {
   const key = normalizedMatchId(matchId);
   const value = normalizedPick(pick);
+  debugState.saveStarted = "ja";
+  debugState.currentSaveMatchId = key || "-";
+  debugState.currentSavePick = value ? `${value[0]}:${value[1]}` : "-";
+  debugState.saveConfirmed = "nein";
+  updateDebugPanel();
   if (!classState.code) {
     return { saved: false, error: "Bitte öffne den Klassenlink erneut und versuche es noch einmal." };
   }
@@ -914,7 +935,7 @@ async function saveRemotePick(matchId, pick) {
   }
   const match = matches.find((entry) => normalizedMatchId(entry.id) === key);
   if (!match || isMatchClosed(match) || !value) {
-    return { saved: false, status: 409, error: "Dieses Spiel hat bereits begonnen. Dein Tipp wurde nicht gespeichert." };
+    return { saved: false, status: 409, error: "Das Spiel hat bereits begonnen. Dein Tipp kann nicht mehr gespeichert werden." };
   }
   const data = await apiRequest(
     "picks",
@@ -2012,6 +2033,9 @@ matchList.addEventListener("click", (event) => {
   if (saveButton) {
     const matchId = normalizedMatchId(saveButton.dataset.savePick);
     debugState.lastAction = `saveButton clicked (${matchId})`;
+    debugState.saveButtonClicked = "ja";
+    debugState.saveStarted = "nein";
+    debugState.saveConfirmed = "nein";
     debugState.lastButtonDisabled = saveButton.disabled ? "ja" : "nein";
     debugState.lastSavedMatchId = matchId;
     updateDebugPanel();
@@ -2039,12 +2063,14 @@ matchList.addEventListener("click", (event) => {
         pendingPickSaves.delete(matchId);
         if (!verified) {
           debugState.lastSaveVerification = "nicht bestätigt";
+          debugState.saveConfirmed = "nein";
           updateDebugPanel();
           pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
           renderMatches();
           return;
         }
         debugState.lastSaveVerification = "Server bestätigt";
+        debugState.saveConfirmed = "ja";
         updateDebugPanel();
         setUserPick(matchId, pickToSave, { locallyConfirmed: true });
         const currentDraft = draftPicks[matchId];
@@ -2060,15 +2086,17 @@ matchList.addEventListener("click", (event) => {
       pendingPickSaves.delete(matchId);
       if (!result.saved) {
         debugState.lastSaveVerification = "Speicherfehler";
+        debugState.saveConfirmed = "nein";
         updateDebugPanel();
-        saveButton.disabled = result.status === 409;
         pickSaveMessages[matchId] = result.status === 409
           ? result.error
           : result.error || "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";
-        saveButton.textContent = pickSaveMessages[matchId];
+        saveButton.disabled = false;
+        renderMatches();
         return;
       }
       debugState.lastSaveVerification = "Server bestätigt";
+      debugState.saveConfirmed = "ja";
       updateDebugPanel();
       setUserPick(matchId, pickToSave, { locallyConfirmed: true });
       const currentDraft = draftPicks[matchId];
@@ -2082,6 +2110,7 @@ matchList.addEventListener("click", (event) => {
     }).catch(() => {
       debugState.lastSavedMatchId = matchId;
       debugState.lastSaveVerification = "Netzwerk-/Speicherfehler";
+      debugState.saveConfirmed = "nein";
       updateDebugPanel();
       pendingPickSaves.delete(matchId);
       pickSaveMessages[matchId] = "Speichern hat nicht geklappt. Bitte versuche es noch einmal.";

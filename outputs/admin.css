@@ -209,6 +209,7 @@ body.is-superadmin .superadmin-section {
 
 .superadmin-admin-pick-match,
 .superadmin-admin-pick-save,
+.superadmin-admin-pick-test,
 .superadmin-admin-pick p {
   grid-column: 1 / -1;
 }
@@ -239,6 +240,11 @@ body.is-superadmin .superadmin-section {
   cursor: pointer;
 }
 
+.superadmin-admin-pick-test {
+  background: #f8fafc !important;
+  color: #4b5b6d !important;
+}
+
 .superadmin-admin-pick p {
   min-height: 1em;
   margin: 0;
@@ -253,6 +259,7 @@ body.is-superadmin .superadmin-section {
 
   .superadmin-admin-pick-match,
   .superadmin-admin-pick-save,
+  .superadmin-admin-pick-test,
   .superadmin-admin-pick p {
     grid-column: auto;
   }
