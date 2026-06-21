@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "95",
+  scriptVersion: "96",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -1449,7 +1449,9 @@ function playerStory(player, rank) {
 function latestFinishedMatch() {
   return matches.reduce((latest, match) => {
     if (match.status !== "done" || !match.result) return latest;
-    if (!latest || match.order >= latest.order) return match;
+    if (!latest) return match;
+    const timeDelta = matchStartTime(match) - matchStartTime(latest);
+    if (timeDelta > 0 || (timeDelta === 0 && match.order > latest.order)) return match;
     return latest;
   }, null);
 }

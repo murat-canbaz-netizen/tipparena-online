@@ -56,6 +56,12 @@ function formatAdminDate(value) {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatAdminKickoff(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+}
+
 function adminAvatarPath(avatar) {
   const safeAvatar = allowedAdminAvatars.has(String(avatar)) ? String(avatar) : "panda";
   return `/avatars/${safeAvatar}.png`;
@@ -271,17 +277,19 @@ function renderResultDiagnostics(diagnostics) {
       </div>
       <div class="superadmin-result-diagnostics-scroll">
         <table>
-          <thead><tr><th>matchId</th><th>Spiel</th><th>Ergebnis</th><th>Status</th><th>Quelle</th><th>Gewertet</th></tr></thead>
+          <thead><tr><th>matchId</th><th>Gruppe</th><th>Kickoff</th><th>Spiel</th><th>Ergebnis</th><th>Status</th><th>Quelle</th><th>Gewertet</th></tr></thead>
           <tbody>
             ${rows.length ? rows.map((entry) => `
               <tr>
                 <td><code>${escapeAdminText(entry.matchId)}</code></td>
+                <td>${escapeAdminText(entry.group || "-")}</td>
+                <td>${escapeAdminText(formatAdminKickoff(entry.kickoff))}</td>
                 <td>${escapeAdminText(entry.teams)}</td>
                 <td>${escapeAdminText(entry.result || "-")}</td>
                 <td>${escapeAdminText(entry.status || "-")}</td>
                 <td>${escapeAdminText(entry.source || "-")}</td>
                 <td>${entry.counted ? "ja" : "nein"}</td>
-              </tr>`).join("") : '<tr><td colspan="6">Noch keine beendeten Spiele erkannt.</td></tr>'}
+              </tr>`).join("") : '<tr><td colspan="8">Noch keine beendeten Spiele erkannt.</td></tr>'}
           </tbody>
         </table>
       </div>

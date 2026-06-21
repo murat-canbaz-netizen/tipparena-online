@@ -84,7 +84,10 @@ function resultDiagnostics(fixtures) {
       const isFinished = fixture?.status === "finished" || ["FT", "AET", "PEN"].includes(fixture?.status);
       return {
         order: index,
+        kickoffTime: Date.parse(match.kickoff),
         matchId: match.id,
+        group: match.group,
+        kickoff: match.kickoff,
         teams: `${match.home} - ${match.away}`,
         result: result ? `${result.home}:${result.away}` : null,
         status: fixture?.status || "open",
@@ -93,7 +96,8 @@ function resultDiagnostics(fixtures) {
         finished: Boolean(isFinished && result),
       };
     })
-    .filter((entry) => entry.finished);
+    .filter((entry) => entry.finished)
+    .sort((left, right) => left.kickoffTime - right.kickoffTime || left.order - right.order);
 
   const lastFinished = finished.at(-1) || null;
   return {
@@ -101,12 +105,14 @@ function resultDiagnostics(fixtures) {
     latestCountedMatch: lastFinished
       ? {
           matchId: lastFinished.matchId,
+          group: lastFinished.group,
+          kickoff: lastFinished.kickoff,
           teams: lastFinished.teams,
           result: lastFinished.result,
           source: lastFinished.source,
         }
       : null,
-    lastFinishedMatches: finished.slice(-10).map(({ order, ...entry }) => entry),
+    lastFinishedMatches: finished.slice(-10).map(({ order, kickoffTime, ...entry }) => entry),
   };
 }
 
