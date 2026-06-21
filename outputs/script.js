@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "97",
+  scriptVersion: "98",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -32,8 +32,20 @@ const debugState = {
   lastPostStatus: "-",
   lastPostResponse: "-",
   lastErrorText: "-",
+  normalizedNickname: "-",
+  playerRecovery: "-",
+  matchingPlayers: "-",
   matchStates: [],
 };
+
+function debugNicknameKey(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("de-DE");
+}
 
 function updateDebugPanel() {
   if (!debugMode) return;
@@ -49,6 +61,7 @@ function updateDebugPanel() {
     `Script-Version: v=${debugState.scriptVersion}`,
     `Raumcode: ${classState.code || "-"}`,
     `Spitzname: ${classState.joinedName || "-"}`,
+    `Normalisierter Spitzname: ${debugState.normalizedNickname}`,
     `playerId: ${classState.playerId || "-"}`,
     `User-Agent: ${debugState.userAgent}`,
     `sessionStorage verfuegbar: ${debugState.storageAvailable}`,
@@ -66,6 +79,8 @@ function updateDebugPanel() {
     `Letzter POST Status: ${debugState.lastPostStatus}`,
     `Letzte POST-Antwort: ${debugState.lastPostResponse}`,
     `Letzter Fehler: ${debugState.lastErrorText}`,
+    `Player-Recovery: ${debugState.playerRecovery}`,
+    `Passende Spielerprofile: ${debugState.matchingPlayers}`,
     ...(debugState.matchStates.length ? ["", "Aktuelle Spielkarten:", ...debugState.matchStates] : []),
   ].join("\n");
 }
@@ -847,8 +862,16 @@ async function createRemotePlayer(nickname, avatar) {
     "/api/player",
   );
   if (!data?.player) return data;
+  const diagnostic = data.playerDiagnostic || {};
   applyRoom(data.room);
   classState.playerId = data.player.id;
+  debugState.normalizedNickname = diagnostic.normalizedNickname || debugNicknameKey(data.player.nickname || nickname);
+  debugState.playerRecovery = data.existing
+    ? `bestehend (${diagnostic.selectedBy || "nickname"})`
+    : "neu erstellt";
+  debugState.matchingPlayers = Array.isArray(diagnostic.matchingPlayers)
+    ? diagnostic.matchingPlayers.map((player) => `${player.selected ? "*" : ""}${player.nickname}/${player.playerId}/${player.pickCount || 0} Tipps`).join(" | ") || "0"
+    : String(diagnostic.matchingPlayerCount ?? "-");
   remoteState.players = [
     ...remoteState.players.filter((player) => player.id !== data.player.id),
     data.player,
@@ -1109,6 +1132,7 @@ function restoreSession() {
   classState.joinedName = saved.nickname || "";
   classState.playerId = saved.playerId || "";
   classState.avatar = saved.avatar || classState.avatar;
+  debugState.normalizedNickname = debugNicknameKey(classState.joinedName) || "-";
   debugState.sessionAvailable = Boolean(classState.playerId);
   updateDebugPanel();
   return Boolean(classState.playerId);
@@ -1713,6 +1737,8 @@ async function joinArena(nickname, avatar, messageTarget) {
   messageTarget.textContent = "Wird gespeichert...";
   messageTarget.style.color = "#b8ff4d";
   const selectedAvatar = avatar || classState.avatar;
+  debugState.normalizedNickname = debugNicknameKey(nickname) || "-";
+  updateDebugPanel();
   const player = await createRemotePlayer(nickname, selectedAvatar);
   if (!player || player.error) {
     messageTarget.textContent = player?.error || "Der Klassenraum ist gerade nicht erreichbar.";

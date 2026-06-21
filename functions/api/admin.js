@@ -20,6 +20,25 @@ function scorePick(pick, result) {
   return 0;
 }
 
+function normalizeNickname(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nicknameKey(value) {
+  return normalizeNickname(value).toLocaleLowerCase("de-DE");
+}
+
+function nicknameSimilarityKey(value) {
+  return nicknameKey(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
 async function loadPointAdjustments(env) {
   try {
     return await supabase(env, "point_adjustments?select=id,room_code,player_id,points,reason,created_at,created_by");
@@ -69,6 +88,11 @@ export async function onRequest(context) {
       .map((room) => {
         const roomPlayers = players.filter((player) => player.room_code === room.code);
         const roomPicks = picks.filter((pick) => pick.room_code === room.code);
+        const roomPicksByPlayer = roomPicks.reduce((map, pick) => {
+          map[pick.player_id] = map[pick.player_id] || [];
+          map[pick.player_id].push(pick);
+          return map;
+        }, {});
         const now = Date.now();
         return {
           roomCode: room.code,
@@ -81,7 +105,7 @@ export async function onRequest(context) {
           pickCount: roomPicks.length,
           players: roomPlayers
             .map((player) => {
-              const playerPicks = roomPicks.filter((pick) => pick.player_id === player.id);
+              const playerPicks = roomPicksByPlayer[player.id] || [];
               const playerAdjustments = pointAdjustments
                 .filter((entry) => entry.room_code === room.code && entry.player_id === player.id)
                 .map((entry) => ({
@@ -113,6 +137,7 @@ export async function onRequest(context) {
                   };
                 })
                 .sort((left, right) => left.matchId.localeCompare(right.matchId));
+              const lastPickAt = latestDate(...playerPicks.map((pick) => pick.updated_at));
               const missingPicks = matchCatalog
                 .filter((match) => !pickedMatchIds.has(match.id))
                 .map((match) => ({
@@ -126,11 +151,50 @@ export async function onRequest(context) {
                 ),
                 0,
               );
+              const valuedPickCount = pickDetails.filter((pick) => pick.result).length;
+              const normalized = nicknameKey(player.nickname);
+              const similar = nicknameSimilarityKey(player.nickname);
+              const duplicateProfiles = roomPlayers
+                .filter((candidate) => candidate.id !== player.id && (
+                  nicknameKey(candidate.nickname) === normalized || nicknameSimilarityKey(candidate.nickname) === similar
+                ))
+                .map((candidate) => {
+                  const candidatePicks = roomPicksByPlayer[candidate.id] || [];
+                  const candidateAdjustments = pointAdjustments
+                    .filter((entry) => entry.room_code === room.code && entry.player_id === candidate.id)
+                    .reduce((sum, entry) => sum + Number(entry.points || 0), 0);
+                  const candidateTipPoints = candidatePicks.reduce(
+                    (sum, pick) => sum + scorePick(
+                      [Number(pick.home_score), Number(pick.away_score)],
+                      resultsByMatch.get(pick.match_id),
+                    ),
+                    0,
+                  );
+                  return {
+                    id: candidate.id,
+                    nickname: candidate.nickname,
+                    normalizedNickname: nicknameKey(candidate.nickname),
+                    avatar: candidate.avatar,
+                    createdAt: candidate.created_at || null,
+                    pickCount: candidatePicks.length,
+                    valuedPickCount: candidatePicks.filter((pick) => resultsByMatch.has(pick.match_id)).length,
+                    tipPoints: candidateTipPoints,
+                    adjustmentPoints: candidateAdjustments,
+                    totalPoints: candidateTipPoints + candidateAdjustments,
+                    lastPickAt: latestDate(...candidatePicks.map((pick) => pick.updated_at)),
+                  };
+                })
+                .sort((left, right) => Number(right.pickCount || 0) - Number(left.pickCount || 0));
               return {
                 id: player.id,
                 nickname: player.nickname,
+                normalizedNickname: normalized,
+                similarNicknameKey: similar,
                 avatar: player.avatar,
                 pickCount: playerPicks.length,
+                valuedPickCount,
+                lastPickAt,
+                duplicateProfiles,
                 pickDetails,
                 tipPoints,
                 adjustmentPoints,

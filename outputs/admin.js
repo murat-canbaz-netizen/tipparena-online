@@ -170,6 +170,43 @@ function renderPointAdjustmentForm(player, room) {
     </details>`;
 }
 
+function renderPlayerProfileDiagnostics(player) {
+  const duplicates = Array.isArray(player.duplicateProfiles) ? player.duplicateProfiles : [];
+  return `
+    <details class="superadmin-profile-debug ${duplicates.length ? "has-duplicates" : ""}">
+      <summary>Spielerprofil prÃ¼fen</summary>
+      ${duplicates.length ? '<p class="superadmin-profile-warning">Achtung: Es gibt mehrere Profile mit Ã¤hnlichem Nicknamen.</p>' : ""}
+      <div class="superadmin-profile-grid">
+        <span>playerId <code>${escapeAdminText(player.id)}</code></span>
+        <span>Normalisierter Name <b>${escapeAdminText(player.normalizedNickname || "-")}</b></span>
+        <span>Gespeicherte Tipps <b>${Number(player.pickCount || 0)}</b></span>
+        <span>Gewertete Tipps <b>${Number(player.valuedPickCount || 0)}</b></span>
+        <span>Tipp-Punkte <b>${Number(player.tipPoints || 0)}</b></span>
+        <span>Korrekturpunkte <b>${Number(player.adjustmentPoints || 0) > 0 ? "+" : ""}${Number(player.adjustmentPoints || 0)}</b></span>
+        <span>Gesamtpunkte <b>${Number((player.totalPoints ?? player.points) || 0)}</b></span>
+        <span>Letzte Speicherung <b>${escapeAdminText(formatAdminDate(player.lastPickAt))}</b></span>
+      </div>
+      ${duplicates.length ? `
+        <div class="superadmin-profile-duplicates">
+          <strong>MÃ¶gliche doppelte Profile</strong>
+          <table>
+            <thead><tr><th>Nickname</th><th>playerId</th><th>Tipps</th><th>Gewertet</th><th>Punkte</th><th>Letzte Speicherung</th></tr></thead>
+            <tbody>
+              ${duplicates.map((entry) => `
+                <tr>
+                  <td>${escapeAdminText(entry.nickname)}</td>
+                  <td><code>${escapeAdminText(entry.id)}</code></td>
+                  <td>${Number(entry.pickCount || 0)}</td>
+                  <td>${Number(entry.valuedPickCount || 0)}</td>
+                  <td>${Number(entry.totalPoints || 0)}</td>
+                  <td>${escapeAdminText(formatAdminDate(entry.lastPickAt))}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>` : '<p class="superadmin-profile-ok">Keine Ã¤hnlichen Profile in diesem Raum gefunden.</p>'}
+    </details>`;
+}
+
 function renderAdminPlayers(room) {
   const players = Array.isArray(room.players) ? room.players : [];
   if (!players.length) return '<p class="superadmin-player-empty">Noch keine Spieler in diesem Raum.</p>';
@@ -194,6 +231,7 @@ function renderAdminPlayers(room) {
           <small class="superadmin-player-points">Tipp-Punkte: ${Number(player.tipPoints || 0)} · Korrektur: ${Number(player.adjustmentPoints || 0) > 0 ? "+" : ""}${Number(player.adjustmentPoints || 0)}</small>
           <p class="superadmin-pick-status">${escapeAdminText(statusText)}</p>
           ${renderMissingPicks(player)}
+          ${renderPlayerProfileDiagnostics(player)}
           ${renderPickDiagnostics(player)}
           ${renderPointAdjustmentForm(player, room)}
           <details class="superadmin-admin-pick">
