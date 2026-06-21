@@ -62,6 +62,25 @@ function formatAdminKickoff(value) {
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
 }
 
+function adminMatchKickoff(match) {
+  if (!match) return null;
+  if (match.kickoff) {
+    const parsed = Date.parse(match.kickoff);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (!match.date || !match.time) return null;
+  const [day, month, year] = String(match.date).split(".").map(Number);
+  const [hour, minute] = String(match.time).split(":").map(Number);
+  const parsed = new Date(year, month - 1, day, hour, minute).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function adminMatchKickoffLabel(match) {
+  if (!match) return "-";
+  if (match.kickoff) return formatAdminKickoff(match.kickoff);
+  return `${match.date || "-"} ${match.time || ""}`.trim();
+}
+
 function adminAvatarPath(avatar) {
   const safeAvatar = allowedAdminAvatars.has(String(avatar)) ? String(avatar) : "panda";
   return `/avatars/${safeAvatar}.png`;
@@ -257,7 +276,99 @@ function addResultsSection() {
   superAdminRooms?.after(superAdminResults);
 }
 
-function renderResultDiagnostics(diagnostics) {
+function buildEvaluationAudit(manualResults, apiFixtures, overview) {
+  const matches = window.tipparenaMatchCatalog || [];
+  const matchById = new Map(matches.map((match) => [String(match.id), match]));
+  const apiByMatch = new Map(
+    (Array.isArray(apiFixtures) ? apiFixtures : [])
+      .filter((fixture) => fixture?.matchId)
+      .map((fixture) => [String(fixture.matchId), fixture]),
+  );
+  const pickCountByMatch = new Map();
+  const rooms = Array.isArray(overview?.rooms) ? overview.rooms : [];
+  rooms.forEach((room) => {
+    (Array.isArray(room.players) ? room.players : []).forEach((player) => {
+      (Array.isArray(player.pickDetails) ? player.pickDetails : []).forEach((pick) => {
+        const matchId = String(pick.matchId || "");
+        if (!matchId) return;
+        pickCountByMatch.set(matchId, (pickCountByMatch.get(matchId) || 0) + 1);
+      });
+    });
+  });
+
+  const manualRows = (Array.isArray(manualResults) ? manualResults : [])
+    .map((result) => {
+      const matchId = String(result.match_id || "");
+      const match = matchById.get(matchId);
+      const fixture = apiByMatch.get(matchId);
+      const apiScoreReady = Number.isFinite(Number(fixture?.goals?.home)) && Number.isFinite(Number(fixture?.goals?.away));
+      const manualScoreReady = Number.isFinite(Number(result.home_score)) && Number.isFinite(Number(result.away_score));
+      const inCatalog = Boolean(match);
+      const inApiResults = Boolean(fixture);
+      const finished = result.status === "finished";
+      const counted = inCatalog && inApiResults && fixture?.status === "finished" && apiScoreReady;
+      const problems = [];
+      if (!inCatalog) problems.push("matchId nicht im Spielkatalog");
+      if (!finished) problems.push("Status nicht finished");
+      if (!manualScoreReady) problems.push("Ergebnis fehlt");
+      if (!inApiResults) problems.push("nicht von /api/results geliefert");
+      if (inApiResults && fixture?.status !== "finished") problems.push("in /api/results nicht finished");
+      if (inApiResults && !apiScoreReady) problems.push("Ergebnis in /api/results fehlt");
+      const pickCount = pickCountByMatch.get(matchId) || 0;
+      if (counted && pickCount === 0) problems.push("keine Tipps vorhanden");
+      return {
+        matchId,
+        match,
+        teams: match ? `${match.home} - ${match.away}` : "Unbekannt",
+        result: manualScoreReady ? `${Number(result.home_score)}:${Number(result.away_score)}` : "-",
+        status: result.status || "-",
+        source: fixture?.manual ? "manual_results" : fixture ? "api_football" : "manual_results",
+        inCatalog,
+        inApiResults,
+        counted,
+        pickCount,
+        problem: problems.length ? problems.join("; ") : "-",
+        updatedAt: result.updated_at || null,
+        kickoffTime: adminMatchKickoff(match),
+      };
+    })
+    .sort((left, right) => (left.kickoffTime ?? Number.MAX_SAFE_INTEGER) - (right.kickoffTime ?? Number.MAX_SAFE_INTEGER) || left.matchId.localeCompare(right.matchId));
+
+  const countedRows = manualRows.filter((row) => row.counted);
+  const latestCounted = countedRows.reduce((latest, row) => {
+    if (!latest) return row;
+    const left = row.kickoffTime ?? -Infinity;
+    const right = latest.kickoffTime ?? -Infinity;
+    return left > right ? row : latest;
+  }, null);
+  const recentManual = [...manualRows]
+    .filter((row) => row.updatedAt)
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+    .slice(0, 10);
+
+  return {
+    totalManual: manualRows.length,
+    inCatalog: manualRows.filter((row) => row.inCatalog).length,
+    inApiResults: manualRows.filter((row) => row.inApiResults).length,
+    counted: countedRows.length,
+    notCounted: manualRows.filter((row) => !row.counted).length,
+    rows: manualRows,
+    latestCounted,
+    lastCountedByKickoff: countedRows.slice(-10),
+    recentManual,
+    playerPoints: rooms.flatMap((room) => (Array.isArray(room.players) ? room.players : []).map((player) => ({
+      roomCode: room.roomCode,
+      nickname: player.nickname,
+      pickCount: Number(player.pickCount || 0),
+      valuedPickCount: (Array.isArray(player.pickDetails) ? player.pickDetails : []).filter((pick) => pick.result).length,
+      tipPoints: Number(player.tipPoints || 0),
+      adjustmentPoints: Number(player.adjustmentPoints || 0),
+      totalPoints: Number((player.totalPoints ?? player.points) || 0),
+    }))),
+  };
+}
+
+function renderResultDiagnostics(diagnostics, manualResults = [], apiFixtures = [], overview = {}) {
   addResultsSection();
   superAdminResultDiagnostics = diagnostics || null;
   const target = superAdminResults?.querySelector("#superAdminResultDiagnostics");
@@ -266,6 +377,7 @@ function renderResultDiagnostics(diagnostics) {
     target.innerHTML = "";
     return;
   }
+  const audit = buildEvaluationAudit(manualResults, apiFixtures, overview);
   const latest = diagnostics.latestCountedMatch;
   const rows = Array.isArray(diagnostics.lastFinishedMatches) ? diagnostics.lastFinishedMatches : [];
   target.innerHTML = `
@@ -293,6 +405,67 @@ function renderResultDiagnostics(diagnostics) {
           </tbody>
         </table>
       </div>
+    </details>
+    <details class="superadmin-result-diagnostics superadmin-evaluation-audit" open>
+      <summary>BewertungsprÃ¼fung</summary>
+      <div class="superadmin-result-diagnostics-summary superadmin-audit-grid">
+        <span>Manuelle Ergebnisse insgesamt <b>${audit.totalManual}</b></span>
+        <span>Im Spielkatalog gefunden <b>${audit.inCatalog}</b></span>
+        <span>Von /api/results geladen <b>${audit.inApiResults}</b></span>
+        <span>FÃ¼r Rangliste gewertet <b>${audit.counted}</b></span>
+        <span>Nicht gewertet <b>${audit.notCounted}</b></span>
+        <span>Letztes gewertetes Spiel <b>${audit.latestCounted ? `${escapeAdminText(audit.latestCounted.matchId)} Â· ${escapeAdminText(audit.latestCounted.teams)} Â· ${escapeAdminText(audit.latestCounted.result)}` : "-"}</b></span>
+      </div>
+      <div class="superadmin-result-diagnostics-scroll">
+        <table>
+          <thead><tr><th>MatchId</th><th>Spiel</th><th>Kickoff</th><th>Ergebnis</th><th>Status</th><th>Quelle</th><th>In /api/results</th><th>Wird gewertet</th><th>Tipps</th><th>Problem</th></tr></thead>
+          <tbody>
+            ${audit.rows.length ? audit.rows.map((row) => `
+              <tr class="${row.counted ? "is-counted" : "is-not-counted"}">
+                <td><code>${escapeAdminText(row.matchId)}</code></td>
+                <td>${escapeAdminText(row.teams)}</td>
+                <td>${escapeAdminText(adminMatchKickoffLabel(row.match))}</td>
+                <td>${escapeAdminText(row.result)}</td>
+                <td>${escapeAdminText(row.status)}</td>
+                <td>${escapeAdminText(row.source)}</td>
+                <td>${row.inApiResults ? "ja" : "nein"}</td>
+                <td>${row.counted ? "ja" : "nein"}</td>
+                <td>${row.pickCount}</td>
+                <td>${escapeAdminText(row.problem)}</td>
+              </tr>`).join("") : '<tr><td colspan="10">Keine manuellen Ergebnisse gespeichert.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <div class="superadmin-audit-columns">
+        <section>
+          <h4>Letzte 10 gewerteten Spiele nach Kickoff</h4>
+          <ul>${audit.lastCountedByKickoff.length ? audit.lastCountedByKickoff.map((row) => `<li><code>${escapeAdminText(row.matchId)}</code> ${escapeAdminText(adminMatchKickoffLabel(row.match))} Â· ${escapeAdminText(row.teams)} Â· ${escapeAdminText(row.result)}</li>`).join("") : "<li>-</li>"}</ul>
+        </section>
+        <section>
+          <h4>Letzte 10 manuelle Ergebnisse nach Speicherung</h4>
+          <ul>${audit.recentManual.length ? audit.recentManual.map((row) => `<li><code>${escapeAdminText(row.matchId)}</code> ${escapeAdminText(formatAdminDate(row.updatedAt))} Â· ${escapeAdminText(row.teams)} Â· ${escapeAdminText(row.result)}</li>`).join("") : "<li>-</li>"}</ul>
+        </section>
+      </div>
+      <details class="superadmin-player-points-audit">
+        <summary>PunkteprÃ¼fung pro Spieler</summary>
+        <div class="superadmin-result-diagnostics-scroll">
+          <table>
+            <thead><tr><th>Raum</th><th>Spieler</th><th>Tipps</th><th>Gewertete Tipps</th><th>Tipp-Punkte</th><th>Korrektur</th><th>Gesamt</th></tr></thead>
+            <tbody>
+              ${audit.playerPoints.length ? audit.playerPoints.map((player) => `
+                <tr>
+                  <td><code>${escapeAdminText(player.roomCode)}</code></td>
+                  <td>${escapeAdminText(player.nickname)}</td>
+                  <td>${player.pickCount}</td>
+                  <td>${player.valuedPickCount}</td>
+                  <td>${player.tipPoints}</td>
+                  <td>${player.adjustmentPoints > 0 ? "+" : ""}${player.adjustmentPoints}</td>
+                  <td><b>${player.totalPoints}</b></td>
+                </tr>`).join("") : '<tr><td colspan="7">Noch keine Spieler vorhanden.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </details>
   `;
 }
@@ -350,7 +523,7 @@ async function loadAdminOverview(adminCode) {
     throw error;
   }
   renderSuperAdmin(overview);
-  renderResultDiagnostics(diagnosisData.resultDiagnostics || null);
+  renderResultDiagnostics(diagnosisData.resultDiagnostics || null, resultData.results, diagnosisData.fixtures, overview);
   renderAdminResults(resultData.results);
 }
 

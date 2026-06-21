@@ -783,6 +783,57 @@ body.is-superadmin .superadmin-section {
   text-transform: uppercase;
 }
 
+.superadmin-audit-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.superadmin-evaluation-audit .is-not-counted td {
+  background: #fff7ed;
+}
+
+.superadmin-evaluation-audit .is-counted td:last-child {
+  color: #2f7d4b;
+  font-weight: 850;
+}
+
+.superadmin-audit-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.superadmin-audit-columns section,
+.superadmin-player-points-audit {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: white;
+  padding: 12px;
+}
+
+.superadmin-audit-columns h4 {
+  margin: 0 0 8px;
+  color: #111827;
+}
+
+.superadmin-audit-columns ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #506071;
+  font-weight: 800;
+}
+
+.superadmin-player-points-audit {
+  margin-top: 14px;
+}
+
+.superadmin-player-points-audit summary {
+  margin-bottom: 10px;
+}
+
 .superadmin-result-row {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) repeat(2, 74px) 120px 86px auto;
@@ -850,6 +901,10 @@ body.is-superadmin .superadmin-section {
   .superadmin-result-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .superadmin-audit-columns {
+    grid-template-columns: 1fr;
   }
 
   .superadmin-result-match,

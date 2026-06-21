@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "96",
+  scriptVersion: "97",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
