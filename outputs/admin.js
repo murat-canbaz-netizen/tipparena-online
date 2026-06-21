@@ -5,6 +5,7 @@ const superAdminStats = document.querySelector("#superAdminStats");
 const superAdminRooms = document.querySelector("#superAdminRooms");
 const adminSessionKey = "tipparenaAdminCode";
 let superAdminResults = null;
+let superAdminResultDiagnostics = null;
 const expandedAdminRooms = new Set();
 const allowedAdminAvatars = new Set(["panda", "koala", "shark", "lion", "croc", "giraffe", "rhino", "axolotl"]);
 
@@ -243,10 +244,49 @@ function addResultsSection() {
       <div><span>Notlösung</span><h3>Spielergebnisse manuell eintragen</h3></div>
       <p>Manuelle Ergebnisse haben Vorrang vor API-Football.</p>
     </div>
+    <div id="superAdminResultDiagnostics"></div>
     <div id="superAdminResultsList"></div>
     <p id="superAdminResultsMessage" role="status"></p>
   `;
   superAdminRooms?.after(superAdminResults);
+}
+
+function renderResultDiagnostics(diagnostics) {
+  addResultsSection();
+  superAdminResultDiagnostics = diagnostics || null;
+  const target = superAdminResults?.querySelector("#superAdminResultDiagnostics");
+  if (!target) return;
+  if (!diagnostics) {
+    target.innerHTML = "";
+    return;
+  }
+  const latest = diagnostics.latestCountedMatch;
+  const rows = Array.isArray(diagnostics.lastFinishedMatches) ? diagnostics.lastFinishedMatches : [];
+  target.innerHTML = `
+    <details class="superadmin-result-diagnostics" open>
+      <summary>Ergebnis-Diagnose</summary>
+      <div class="superadmin-result-diagnostics-summary">
+        <span>Manuelle Ergebnisse: <b>${Number(diagnostics.manualResultCount || 0)}</b></span>
+        <span>Letztes gewertetes Spiel: <b>${latest ? `${escapeAdminText(latest.matchId)} · ${escapeAdminText(latest.teams)} · ${escapeAdminText(latest.result || "-")}` : "-"}</b></span>
+      </div>
+      <div class="superadmin-result-diagnostics-scroll">
+        <table>
+          <thead><tr><th>matchId</th><th>Spiel</th><th>Ergebnis</th><th>Status</th><th>Quelle</th><th>Gewertet</th></tr></thead>
+          <tbody>
+            ${rows.length ? rows.map((entry) => `
+              <tr>
+                <td><code>${escapeAdminText(entry.matchId)}</code></td>
+                <td>${escapeAdminText(entry.teams)}</td>
+                <td>${escapeAdminText(entry.result || "-")}</td>
+                <td>${escapeAdminText(entry.status || "-")}</td>
+                <td>${escapeAdminText(entry.source || "-")}</td>
+                <td>${entry.counted ? "ja" : "nein"}</td>
+              </tr>`).join("") : '<tr><td colspan="6">Noch keine beendeten Spiele erkannt.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  `;
 }
 
 function renderAdminResults(results) {
@@ -283,12 +323,14 @@ async function loadAdminOverview(adminCode) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const [overviewResponse, resultsResponse] = await Promise.all([
-    fetch("/api/admin", options({ adminCode })),
-    fetch("/api/admin-results", options({ adminCode, action: "list" })),
+  const [overviewResponse, resultsResponse, diagnosisResponse] = await Promise.all([
+    fetch("/api/admin", { ...options({ adminCode }), cache: "no-store" }),
+    fetch("/api/admin-results", { ...options({ adminCode, action: "list" }), cache: "no-store" }),
+    fetch(`/api/results?debug=1&t=${Date.now()}`, { cache: "no-store" }),
   ]);
   const overview = await overviewResponse.json().catch(() => ({}));
   const resultData = await resultsResponse.json().catch(() => ({}));
+  const diagnosisData = await diagnosisResponse.json().catch(() => ({}));
   if (!overviewResponse.ok) {
     const error = new Error(overview.error || "Adminbereich konnte nicht geladen werden.");
     error.status = overviewResponse.status;
@@ -300,6 +342,7 @@ async function loadAdminOverview(adminCode) {
     throw error;
   }
   renderSuperAdmin(overview);
+  renderResultDiagnostics(diagnosisData.resultDiagnostics || null);
   renderAdminResults(resultData.results);
 }
 
@@ -561,10 +604,7 @@ superAdminSection?.addEventListener("submit", async (event) => {
       if (response.status === 401) clearAdminCode();
       throw new Error(data.error || "Ergebnis konnte nicht gespeichert werden.");
     }
-    if (typeof window.tipparenaRefreshResults !== "function") {
-      throw new Error("Ergebnis wurde gespeichert, konnte aber nicht sofort aktualisiert werden.");
-    }
-    await window.tipparenaRefreshResults();
+    await refreshAdminAndLeaderboard(adminCode);
     button.textContent = "Ergebnis gespeichert ✓";
     if (message) message.textContent = data.warning || "Ergebnis gespeichert ✓";
   } catch (error) {

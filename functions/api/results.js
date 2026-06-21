@@ -1,5 +1,6 @@
 import { jsonResponse, supabase } from "../lib/shared.js";
 import { refreshLeaderboardSnapshots } from "../lib/leaderboard.js";
+import { matchCatalog } from "../lib/matches.js";
 
 const apiUrl = "https://v3.football.api-sports.io/fixtures";
 const liveStatuses = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE", "live"]);
@@ -43,7 +44,73 @@ function normalizeManualResult(entry) {
   };
 }
 
-async function mergedResponse(env, apiData, manualFixtures, updateSnapshot = true) {
+function fixtureMatchId(fixture) {
+  if (fixture.matchId) return String(fixture.matchId).trim().toLowerCase();
+  return matchCatalog.find(
+    (match) =>
+      normalizedResultName(match.home) === normalizedResultName(fixture.home?.name) &&
+      normalizedResultName(match.away) === normalizedResultName(fixture.away?.name),
+  )?.id || null;
+}
+
+function normalizedResultName(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function fixtureResult(fixture) {
+  if (fixture.status === "open") return null;
+  const home = Number(fixture.goals?.home);
+  const away = Number(fixture.goals?.away);
+  return Number.isFinite(home) && Number.isFinite(away) ? { home, away } : null;
+}
+
+function resultDiagnostics(fixtures) {
+  const byMatch = new Map();
+  fixtures.forEach((fixture) => {
+    const matchId = fixtureMatchId(fixture);
+    if (!matchId) return;
+    byMatch.set(matchId, fixture);
+  });
+
+  const finished = matchCatalog
+    .map((match, index) => {
+      const fixture = byMatch.get(match.id);
+      const result = fixture ? fixtureResult(fixture) : null;
+      const isFinished = fixture?.status === "finished" || ["FT", "AET", "PEN"].includes(fixture?.status);
+      return {
+        order: index,
+        matchId: match.id,
+        teams: `${match.home} - ${match.away}`,
+        result: result ? `${result.home}:${result.away}` : null,
+        status: fixture?.status || "open",
+        source: fixture?.manual ? "manual_results" : fixture ? "api_football" : "none",
+        counted: Boolean(result),
+        finished: Boolean(isFinished && result),
+      };
+    })
+    .filter((entry) => entry.finished);
+
+  const lastFinished = finished.at(-1) || null;
+  return {
+    manualResultCount: fixtures.filter((fixture) => fixture.manual).length,
+    latestCountedMatch: lastFinished
+      ? {
+          matchId: lastFinished.matchId,
+          teams: lastFinished.teams,
+          result: lastFinished.result,
+          source: lastFinished.source,
+        }
+      : null,
+    lastFinishedMatches: finished.slice(-10).map(({ order, ...entry }) => entry),
+  };
+}
+
+async function mergedResponse(env, apiData, manualFixtures, updateSnapshot = true, includeDiagnostics = false) {
   const fixtures = [...(apiData.fixtures || []), ...manualFixtures];
   if (updateSnapshot) {
     try {
@@ -57,6 +124,7 @@ async function mergedResponse(env, apiData, manualFixtures, updateSnapshot = tru
     fixtures,
     hasLiveMatches: fixtures.some((fixture) => liveStatuses.has(fixture.status)),
     manualResults: manualFixtures.length,
+    ...(includeDiagnostics ? { resultDiagnostics: resultDiagnostics(fixtures) } : {}),
   });
   response.headers.set("Cache-Control", "no-store");
   return response;
@@ -115,6 +183,7 @@ export async function onRequest(context) {
 
   const sourceParams = new URL(request.url).searchParams;
   const adminTest = adminTestMode(request, env);
+  const includeResultDiagnostics = adminTest.authorized || sourceParams.get("debug") === "1";
   if (adminTest.enabled && !adminTest.authorized) {
     return jsonResponse(401, { error: "Admin-Testmodus ist nicht autorisiert." });
   }
@@ -154,7 +223,7 @@ export async function onRequest(context) {
         warning: "Live-Ergebnisse sind noch nicht konfiguriert. Manuelle Ergebnisse werden verwendet.",
         ...(adminTest.authorized ? { diagnostic } : {}),
         nextUpdateSeconds: idleCacheSeconds,
-      }, manualFixtures);
+      }, manualFixtures, true, includeResultDiagnostics);
     }
 
     const cache = caches.default;
@@ -167,6 +236,7 @@ export async function onRequest(context) {
         cachedData,
         manualFixtures,
         !cachedData.rateLimited && Boolean(cachedData.fixtures?.length),
+        includeResultDiagnostics,
       );
     }
 
@@ -191,7 +261,7 @@ export async function onRequest(context) {
       const cachedRateLimit = jsonResponse(200, apiData);
       cachedRateLimit.headers.set("Cache-Control", `public, max-age=${rateLimitCacheSeconds}`);
       if (!adminTest.authorized) context.waitUntil(cache.put(cacheKey, cachedRateLimit));
-      return await mergedResponse(env, apiData, manualFixtures, false);
+      return await mergedResponse(env, apiData, manualFixtures, false, includeResultDiagnostics);
     }
 
     if (!apiResponse.ok || data.errors?.length || Object.keys(data.errors || {}).length) {
@@ -202,7 +272,7 @@ export async function onRequest(context) {
         warning: "API-Football konnte keine Live-Ergebnisse liefern. Manuelle Ergebnisse werden verwendet.",
         ...(adminTest.authorized ? { diagnostic } : {}),
         nextUpdateSeconds: idleCacheSeconds,
-      }, manualFixtures, false);
+      }, manualFixtures, false, includeResultDiagnostics);
     }
 
     const fixtures = Array.isArray(data.response) ? data.response.map(normalizeFixture) : [];
@@ -228,7 +298,7 @@ export async function onRequest(context) {
     const cachedApiResponse = jsonResponse(200, apiData);
     cachedApiResponse.headers.set("Cache-Control", `public, max-age=${cacheSeconds}`);
     if (!adminTest.authorized) context.waitUntil(cache.put(cacheKey, cachedApiResponse));
-    return await mergedResponse(env, apiData, manualFixtures, fixtures.length > 0);
+    return await mergedResponse(env, apiData, manualFixtures, fixtures.length > 0, includeResultDiagnostics);
   } catch (error) {
     const diagnostic = {
       category: "network_or_server_error",

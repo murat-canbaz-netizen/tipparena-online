@@ -14,7 +14,7 @@ const windowSessionPrefix = "tipparena-session:";
 const adminRoomsKey = "tipparena-admin-rooms";
 const debugMode = new URLSearchParams(window.location.search).get("debug") === "1";
 const debugState = {
-  scriptVersion: "94",
+  scriptVersion: "95",
   sessionSource: "keine",
   sessionAvailable: false,
   storageAvailable: "unbekannt",
@@ -299,12 +299,13 @@ const rawMatches = [
 ];
 
 const groupMatchCounter = {};
-const matches = rawMatches.map(([group, date, time, home, away]) => {
+const matches = rawMatches.map(([group, date, time, home, away], index) => {
   groupMatchCounter[group] = (groupMatchCounter[group] || 0) + 1;
   const id = `${group.toLowerCase()}${groupMatchCounter[group]}`;
   const results = {};
   return {
     id,
+    order: index,
     group,
     date,
     time,
@@ -316,7 +317,7 @@ const matches = rawMatches.map(([group, date, time, home, away]) => {
   };
 });
 
-window.tipparenaMatchCatalog = matches.map(({ id, group, date, time, home, away }) => ({ id, group, date, time, home, away }));
+window.tipparenaMatchCatalog = matches.map(({ id, order, group, date, time, home, away }) => ({ id, order, group, date, time, home, away }));
 
 function buildPicks(seed) {
   return Object.fromEntries(
@@ -1448,7 +1449,7 @@ function playerStory(player, rank) {
 function latestFinishedMatch() {
   return matches.reduce((latest, match) => {
     if (match.status !== "done" || !match.result) return latest;
-    if (!latest || matchStartTime(match) >= matchStartTime(latest)) return match;
+    if (!latest || match.order >= latest.order) return match;
     return latest;
   }, null);
 }
